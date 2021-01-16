@@ -1,19 +1,12 @@
 --------------------------------------------------------------------------------
 -- Filename     : keypad_driver.vhd
--- Author       : Chris Lloyd
--- Date Created : 2019-02-26
--- Last Revised : 2019-02-28
--- Project      : lcd_keypad_dev
+-- Author(s)    : Chris Lloyd
+-- Class        : EE316 (Project 1)
+-- Due Date     : 2021-01-28
+-- Target Board : Altera DE2 Devkit
+-- Entity       : keypad_driver
 -- Description  : Driver code to return a binary representation of the output
---                of a 16 button keypad (Sparkfun DD-14881)
---------------------------------------------------------------------------------
--- Todos:
---
--- Done:
--- 1. Solve all CDL=>
--- 2. Add process descriptions
--- 3. Ensure indentation and spacing is clean and consistent.
---
+--                of a 16 button keypad.
 --------------------------------------------------------------------------------
 
 -----------------
@@ -26,46 +19,35 @@ library ieee;
 --------------
 --  Entity  --
 --------------
-entity hex_keypad_driver is
+entity keypad_driver is
 port
 (
   -- Clocks & Resets
-  I_CLK_100MHZ    : in  std_logic;
-  I_SYSTEM_RST    : in  std_logic;
+  I_CLK_125MHZ    : in std_logic;
 
   -- Keypad Inputs (rows)
-  I_KEYPAD_ROW_1  : in  std_logic;
-  I_KEYPAD_ROW_2  : in  std_logic;
-  I_KEYPAD_ROW_3  : in  std_logic;
-  I_KEYPAD_ROW_4  : in  std_logic;
+  I_KEYPAD_ROWS   : in std_logic_vector(3 downto 0);
 
   -- Keypad Outputs (cols)
-  O_KEYPAD_COL_1  : out std_logic;
-  O_KEYPAD_COL_2  : out std_logic;
-  O_KEYPAD_COL_3  : out std_logic;
-  O_KEYPAD_COL_4  : out std_logic;
+  O_KEYPAD_COLS   : out std_logic_vector(3 downto 0);
 
   -- 4 bit binary representation of keypad state (output of entity)
-  O_KEYPAD_BINARY : out std_logic_vector(3 downto 0);
-
-  -- 6 bit binary representation of keypad state for RGB representation
-  O_KEYPAD_RGB_BINARY : out std_logic_vector(5 downto 0)
+  O_KEYPAD_BINARY : out std_logic_vector(3 downto 0)
 );
-end entity hex_keypad_driver;
-
+end entity keypad_driver;
 
 --------------------------------
 --  Architecture Declaration  --
 --------------------------------
-architecture rtl of hex_keypad_driver is
+architecture rtl of keypad_driver is
 
   -------------
   -- SIGNALS --
   -------------
 
   -- Keypad counter and enable to account for delay time
-  signal s_keypad_enable      : std_logic;
-  signal s_keypad_enable_cntr : unsigned(6 downto 0);
+  signal s_keypad_enable      : std_logic := '0';
+  signal s_keypad_enable_cntr : unsigned(7 downto 0) := "00000000";
 
   -- State related signals
   type t_STATE is (IDLE_STATE,
@@ -73,43 +55,39 @@ architecture rtl of hex_keypad_driver is
                    COL2_POWER_STATE, COL2_READ_STATE,
                    COL3_POWER_STATE, COL3_READ_STATE,
                    COL4_POWER_STATE, COL4_READ_STATE);
-  signal s_keypad_state       : t_STATE;
+  signal s_keypad_state       : t_STATE := IDLE_STATE;
 
   -- Signals to allow current state of columns to be read as well as written to
-  signal s_keypad_col_1       : std_logic;
-  signal s_keypad_col_2       : std_logic;
-  signal s_keypad_col_3       : std_logic;
-  signal s_keypad_col_4       : std_logic;
+  signal s_keypad_col_1       : std_logic := '0';
+  signal s_keypad_col_2       : std_logic := '0';
+  signal s_keypad_col_3       : std_logic := '0';
+  signal s_keypad_col_4       : std_logic := '0';
 
   -- 4 bit binary representation of keypad state (output of entity)
   signal s_keypad_binary      : std_logic_vector(3 downto 0);
 
-  -- 6 bit binary representation of keypad value used for RGB LEDs
-  signal s_keypad_RGB_binary  : std_logic_vector(5 downto 0);
+  -- Binary signal used to store whether a button has been pressed or not
+  signal s_button_pressed     : std_logic;
 
 begin
+
   ------------------------------------------------------------------------------
   -- Process Name     : KEYPAD_EN_CNTR
-  -- Sensitivity List : I_CLK_100MHZ    : 100 MHz global clock
-  --                    I_SYSTEM_RST    : Global Reset line
+  -- Sensitivity List : I_CLK_125MHZ    : 125 MHz global clock
   -- Useful Outputs   : s_keypad_enable : Enable line to allow state to change
-  --                    in KEYPAD_STATE_MACHINE process
-  --                    (active high enable logic)
+  --                                      in KEYPAD_STATE_MACHINE process
+  --                                      (active high enable logic)
   -- Description      : Counter to delay the powering of the columns to negate
-  --                    the delay of the Hardware. Every 1111111b (127) clock
-  --                    ticks (1.27 us), s_keypad_enable gets driven high to
+  --                    the delay of the Hardware. Every 11111111b (255) clock
+  --                    ticks (~2 us), s_keypad_enable gets driven high to
   --                    allow for state change in KEYPAD_STATE_MACHINE process.
   ------------------------------------------------------------------------------
-  KEYPAD_EN_CNTR: process (I_CLK_100MHZ, I_SYSTEM_RST)
+  KEYPAD_EN_CNTR: process (I_CLK_125MHZ)
   begin
-    if (I_SYSTEM_RST = '1') then
-      s_keypad_enable_cntr  <= (others => '0');
-      s_keypad_enable       <= '0';
-
-    elsif (rising_edge(I_CLK_100MHZ)) then
+    if (rising_edge(I_CLK_125MHZ)) then
       s_keypad_enable_cntr  <= s_keypad_enable_cntr + 1;
 
-      if (s_keypad_enable_cntr = "1111111") then  -- Max count 127 (1.27 us)
+      if (s_keypad_enable_cntr = "11111111") then  -- Max count 255 (~2 us)
         s_keypad_enable     <= '1';
       else
         s_keypad_enable     <= '0';
@@ -120,8 +98,7 @@ begin
 
   ------------------------------------------------------------------------------
   -- Process Name     : KEYPAD_STATE_MACHINE
-  -- Sensitivity List : I_CLK_100MHZ    : 100 MHz global clock
-  --                    I_SYSTEM_RST    : Global Reset line
+  -- Sensitivity List : I_CLK_125MHZ    : 125 MHz global clock
   -- Useful Outputs   : s_keypad_state  : Current state of keypad state machine.
   --                                      Used to control read and write of row
   --                                      and cols in KEYPAD_TO_BINARY process.
@@ -129,16 +106,13 @@ begin
   --                    and read of rows and cols. Always a power state then a
   --                    read state.
   ------------------------------------------------------------------------------
-  KEYPAD_STATE_MACHINE: process (I_CLK_100MHZ, I_SYSTEM_RST)
+  KEYPAD_STATE_MACHINE: process (I_CLK_125MHZ)
   begin
-    if (I_SYSTEM_RST = '1') then  -- Upon reset, set the state to IDLE_STATE
-      s_keypad_state          <= IDLE_STATE;
-
-    elsif (rising_edge(I_CLK_100MHZ)) then  -- CDL=> Why be explicit about clock
+    if (rising_edge(I_CLK_125MHZ)) then
       if (s_keypad_enable = '1') then
         case s_keypad_state is
           when IDLE_STATE =>
-              s_keypad_state  <= COL2_POWER_STATE; -- CDL=> COL1_POWER_STATE?
+              s_keypad_state  <= COL1_POWER_STATE;
 
           when COL1_POWER_STATE =>
               s_keypad_state  <= COL1_READ_STATE;
@@ -173,25 +147,16 @@ begin
 
   ------------------------------------------------------------------------------
   -- Process Name     : KEYPAD_TO_BINARY
-  -- Sensitivity List : I_CLK_100MHZ    : 100 MHz global clock
-  --                    I_SYSTEM_RST    : Global Reset line
+  -- Sensitivity List : I_CLK_125MHZ    : 125 MHz global clock
   -- Useful Outputs   : s_keypad_binary : 4 bit binary representation of keypad
   --                                      state (output of entity).
   -- Description      : Entity to control the powering and reading of the
   --                    keypad rows and columns based on the current s_keypad_state.
   --                    Outputs the current binary number of keypad (0-15)
   ------------------------------------------------------------------------------
-  KEYPAD_TO_BINARY: process (I_CLK_100MHZ, I_SYSTEM_RST)
+  KEYPAD_TO_BINARY: process (I_CLK_125MHZ)
   begin
-    if (I_SYSTEM_RST = '1') then
-      s_keypad_col_1      <= '0';
-      s_keypad_col_2      <= '0';
-      s_keypad_col_3      <= '0';
-      s_keypad_col_4      <= '0';
-      s_keypad_binary     <= (others => '0');
-      s_keypad_RGB_binary <= (others => '0');
-
-    elsif ((rising_edge(I_CLK_100MHZ))) then
+    if ((rising_edge(I_CLK_125MHZ))) then
 
       -- Power the Column 1
       if (s_keypad_state = COL1_POWER_STATE) then
@@ -230,88 +195,89 @@ begin
 
       -- Col 1
       if (s_keypad_state = COL1_READ_STATE) then
-        if    (I_KEYPAD_ROW_1 = '1') then
+        s_button_pressed <= '0'; -- Reset to 0 at start of "cycle"
+        if   (I_KEYPAD_ROWS(0) = '1') then
           s_keypad_binary <= "0001";
-          s_keypad_RGB_binary <= "000001";    -- row 1 column 1 keypad entry
-        elsif (I_KEYPAD_ROW_2 = '1') then
+          s_button_pressed <= '1';
+        elsif (I_KEYPAD_ROWS(1) = '1') then
           s_keypad_binary <= "0100";
-          s_keypad_RGB_binary <= "000101";    -- row 2 column 1 keypad entry
-        elsif (I_KEYPAD_ROW_3 = '1') then
+          s_button_pressed <= '1';
+        elsif (I_KEYPAD_ROWS(2) = '1') then
           s_keypad_binary <= "0111";
-          s_keypad_RGB_binary <= "001001";    -- row 3 column 1 keypad entry
-        elsif (I_KEYPAD_ROW_4 = '1') then
-          s_keypad_binary <= "1110";
-          s_keypad_RGB_binary <= "001101";    -- row 4 column 1 keypad entry
+          s_button_pressed <= '1';
+        elsif (I_KEYPAD_ROWS(3) = '1') then
+          s_keypad_binary <= "1111";
+          s_button_pressed <= '1';
         else
           s_keypad_binary <= s_keypad_binary;
-          -- TODO KAB=>add RGB binary output here
         end if;
 
       -- Col 2
       elsif (s_keypad_state = COL2_READ_STATE) then
-        if    (I_KEYPAD_ROW_1 = '1') then
+        if    (I_KEYPAD_ROWS(0) = '1') then
           s_keypad_binary <= "0010";
-          s_keypad_RGB_binary <= "000010";    -- row 1 column 2 keypad entry
-        elsif (I_KEYPAD_ROW_2 = '1') then
+          s_button_pressed <= '1';
+        elsif (I_KEYPAD_ROWS(1) = '1') then
           s_keypad_binary <= "0101";
-          s_keypad_RGB_binary <= "000110";    -- row 2 column 2 keypad entry
-        elsif (I_KEYPAD_ROW_3 = '1') then
+          s_button_pressed <= '1';
+        elsif (I_KEYPAD_ROWS(2) = '1') then
           s_keypad_binary <= "1000";
-          s_keypad_RGB_binary <= "001010";    -- row 3 column 2 keypad entry
-        elsif (I_KEYPAD_ROW_4 = '1') then
+          s_button_pressed <= '1';
+        elsif (I_KEYPAD_ROWS(3) = '1') then
           s_keypad_binary <= "0000";
-          s_keypad_RGB_binary <= "001110";    -- row 4 column 2 keypad entry
+          s_button_pressed <= '1';
         else
           s_keypad_binary <= s_keypad_binary;
-          -- TODO KAB=>add RGB binary output here
         end if;
 
       -- Col 3
       elsif (s_keypad_state = COL3_READ_STATE) then
-        if    (I_KEYPAD_ROW_1 = '1') then
+        if    (I_KEYPAD_ROWS(0) = '1') then
           s_keypad_binary <= "0011";
-          s_keypad_RGB_binary <= "000011";    -- row 1 column 3 keypad entry
-        elsif (I_KEYPAD_ROW_2 = '1') then
+          s_button_pressed <= '1';
+        elsif (I_KEYPAD_ROWS(1) = '1') then
           s_keypad_binary <= "0110";
-          s_keypad_RGB_binary <= "000111";    -- row 2 column 3 keypad entry
-        elsif (I_KEYPAD_ROW_3 = '1') then
+          s_button_pressed <= '1';
+        elsif (I_KEYPAD_ROWS(2) = '1') then
           s_keypad_binary <= "1001";
-          s_keypad_RGB_binary <= "001011";    -- row 3 column 3 keypad entry
-        elsif (I_KEYPAD_ROW_4 = '1') then
+          s_button_pressed <= '1';
+        elsif (I_KEYPAD_ROWS(3) = '1') then
           s_keypad_binary <= "1111";
-          s_keypad_RGB_binary <= "001111";    -- row 4 column 3 keypad entry
+          s_button_pressed <= '1';
         else
           s_keypad_binary <= s_keypad_binary;
         end if;
 
       -- Col 4
       elsif (s_keypad_state = COL4_READ_STATE) then
-        if    (I_KEYPAD_ROW_1 = '1') then
-          s_keypad_binary <= "1010";
-          s_keypad_RGB_binary <= "000100";    -- row 1 column 4 keypad entry
-        elsif (I_KEYPAD_ROW_2 = '1') then
-          s_keypad_binary <= "1011";
-          s_keypad_RGB_binary <= "001000";    -- row 2 column 4 keypad entry
-        elsif (I_KEYPAD_ROW_3 = '1') then
-          s_keypad_binary <= "1100";
-          s_keypad_RGB_binary <= "001100";    -- row 3 column 4 keypad entry
-        elsif (I_KEYPAD_ROW_4 = '1') then
-          s_keypad_binary <= "1101";
-          s_keypad_RGB_binary <= "010000";    -- row 4 column 4 keypad entry
+        if    (I_KEYPAD_ROWS(0) = '1') then
+          s_keypad_binary <= "1111";
+          s_button_pressed <= '1';
+        elsif (I_KEYPAD_ROWS(1) = '1') then
+          s_keypad_binary <= "1111";
+          s_button_pressed <= '1';
+        elsif (I_KEYPAD_ROWS(2) = '1') then
+          s_keypad_binary <= "1111";
+          s_button_pressed <= '1';
+        elsif (I_KEYPAD_ROWS(3) = '1') then
+          s_keypad_binary <= "1111";
+          s_button_pressed <= '1';
         else
-          s_keypad_binary <= s_keypad_binary;
+          if (s_button_pressed = '1') then
+            s_keypad_binary <= s_keypad_binary;
+          else
+            s_keypad_binary <= "1111";
+          end if;
         end if;
-
-      else
-        s_keypad_binary   <= s_keypad_binary;
       end if;
     end if;
   end process KEYPAD_TO_BINARY;
-  O_KEYPAD_COL_1          <= s_keypad_col_1;
-  O_KEYPAD_COL_2          <= s_keypad_col_2;
-  O_KEYPAD_COL_3          <= s_keypad_col_3;
-  O_KEYPAD_COL_4          <= s_keypad_col_4;
-  O_KEYPAD_BINARY         <= s_keypad_binary;
-  O_KEYPAD_RGB_BINARY     <= s_keypad_RGB_binary;
   ------------------------------------------------------------------------------
+
+  O_KEYPAD_COLS(0) <= s_keypad_col_1;
+  O_KEYPAD_COLS(1) <= s_keypad_col_2;
+  O_KEYPAD_COLS(2) <= s_keypad_col_3;
+  O_KEYPAD_COLS(3) <= s_keypad_col_4;
+  O_KEYPAD_BINARY  <= s_keypad_binary;
+
 end architecture rtl;
