@@ -28,8 +28,8 @@ port
 (
   I_CLK          : in std_logic;                     -- System clk frequency of (C_CLK_FREQ_MHZ)
   I_RESET_N      : in std_logic;                     -- System reset (active low)
-  I_DATA_NIBBLE  : in Std_logic_Vector(3 downto 0);  -- Input data (hex nibble) to display
-  O_SEGMENT_N    : out Std_logic_Vector(6 downto 0)  -- Output segments (active low)
+  I_DATA_NIBBLE  : in std_logic_vector(3 downto 0);  -- Input data (hex nibble) to display
+  O_SEGMENT_N    : out std_logic_vector(6 downto 0)  -- Output segments (active low)
 );
 end entity seven_seg_driver;
 

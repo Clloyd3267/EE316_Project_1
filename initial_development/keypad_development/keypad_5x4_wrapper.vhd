@@ -22,6 +22,10 @@ library work;
 --  Entity  --
 --------------
 entity keypad_5x4_wrapper is
+generic
+(
+  C_CLK_FREQ_MHZ   : integer := 50                      -- System clock frequency in MHz
+);
 port
 (
   I_CLK            : in std_logic;                      -- System clk frequency of (C_CLK_FREQ_MHZ)
@@ -71,35 +75,34 @@ architecture behavioral of keypad_5x4_wrapper is
   -- Components --
   ----------------
   component keypad_driver is
-    generic
-    (
-      C_CLK_FREQ_MHZ   : integer;      -- System clock frequency in MHz
-      C_STABLE_TIME_MS : integer;      -- Time required for button to remain stable in ms
-      C_SCAN_TIME_US   : integer;      -- Time required for column power to fully settle in us
-      C_TRIGGER_EDGE   : t_EDGE_TYPE;  -- Edge to trigger on
+  generic
+  (
+    C_CLK_FREQ_MHZ   : integer;      -- System clock frequency in MHz
+    C_STABLE_TIME_MS : integer;      -- Time required for button to remain stable in ms
+    C_SCAN_TIME_US   : integer;      -- Time required for column power to fully settle in us
+    C_TRIGGER_EDGE   : t_EDGE_TYPE;  -- Edge to trigger on
 
-      -- Dimensions of matrix keypad
-      C_NUM_ROWS       : integer;
-      C_NUM_COLS       : integer
-    );
-    port
-    (
-      I_CLK            : in std_logic;                                   -- System clk frequency of (C_CLK_FREQ_MHZ)
-      I_RESET_N        : in std_logic;                                   -- System reset (active low)
-      I_KEYPAD_ENABLE  : in std_logic;                                   -- Module enable signal
-      I_KEYPAD_ROWS    : in std_logic_vector((C_NUM_ROWS-1) downto 0);   -- Keypad Inputs (rows)
-      O_KEYPAD_COLS    : out std_logic_vector((C_NUM_COLS-1) downto 0);  -- Keypad Outputs (cols)
+    -- Dimensions of matrix keypad
+    C_NUM_ROWS       : integer;
+    C_NUM_COLS       : integer
+  );
+  port
+  (
+    I_CLK            : in std_logic;                                   -- System clk frequency of (C_CLK_FREQ_MHZ)
+    I_RESET_N        : in std_logic;                                   -- System reset (active low)
+    I_KEYPAD_ENABLE  : in std_logic;                                   -- Module enable signal
+    I_KEYPAD_ROWS    : in std_logic_vector((C_NUM_ROWS-1) downto 0);   -- Keypad Inputs (rows)
+    O_KEYPAD_COLS    : out std_logic_vector((C_NUM_COLS-1) downto 0);  -- Keypad Outputs (cols)
 
-      -- Final binary representation of keypad state
-      O_KEYPAD_BINARY  : out std_logic_vector(((C_NUM_ROWS * C_NUM_COLS)-1) downto 0)
-    );
-    end component keypad_driver;
+    -- Final binary representation of keypad state
+    O_KEYPAD_BINARY  : out std_logic_vector(((C_NUM_ROWS * C_NUM_COLS)-1) downto 0)
+  );
+  end component keypad_driver;
 
   ---------------
   -- Constants --
   ---------------
 
-  constant C_CLK_FREQ_MHZ   : integer     := 50;      -- System clock frequency in MHz
   constant C_STABLE_TIME_MS : integer     := 5;       -- Time required for button to remain stable in ms
   constant C_SCAN_TIME_US   : integer     := 2;       -- Time required for column power to fully settle in us
   constant C_TRIGGER_EDGE   : t_EDGE_TYPE := RISING;  -- Edge to trigger on
