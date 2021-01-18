@@ -142,30 +142,49 @@ begin
 
   ------------------------------------------------------------------------------
   -- Process Name     : KEYPAD_DATA_MAP
-  -- Sensitivity List : I_CLK     : System clock
-  --                    I_RESET_N : System reset (active low logic)
-  -- Useful Outputs   :
-  --
-  -- Description      :
+  -- Sensitivity List : I_CLK         : System clock
+  --                    I_RESET_N     : System reset (active low logic)
+  -- Useful Outputs   : O_KEYPRESSED  : Trigger indicating (O_KEYPAD_DATA) is valid
+  --                    O_KEYPAD_DATA : Data from button press
+  -- Description      : Maps raw edge inputs from keypad driver to a more user friendly data and
+  --                    trigger outputs.
   ------------------------------------------------------------------------------
   KEYPAD_DATA_MAP: process (I_CLK, I_RESET_N)
   begin
     if (I_RESET_N = '0') then
       s_keypad_enable <= '0';
+      O_KEYPRESSED    <= '0';
+      O_KEYPAD_DATA   <= (others=>'0');
 
     elsif (rising_edge(I_CLK)) then
-      s_keypad_enable <= '0';
+      s_keypad_enable <= '1';
 
-      if (button pressed // CDL=>here) then
-        case(I_DATA_NIBBLE) is
-          when "0000" =>
-            O_SEGMENT_N <= "1000000";   -- '0'
-          when "0001" =>
-            O_SEGMENT_N <= "1111001";   -- '1'
-          when others =>
-            O_SEGMENT_N <= "1111111";   -- ' '
-        end case;
-      end if ;
+      -- Check if button pressed
+      O_KEYPRESSED <= or s_keypad_binary;
+
+      -- Map keypad data
+      -- CDL=> Convert to BIT_HEX for readablity
+      if    (s_keypad_binary(0))  then O_KEYPAD_DATA <= "01010";  -- 0xA
+      elsif (s_keypad_binary(1))  then O_KEYPAD_DATA <= "01011";  -- 0xB
+      elsif (s_keypad_binary(2))  then O_KEYPAD_DATA <= "01100";  -- 0xC
+      elsif (s_keypad_binary(3))  then O_KEYPAD_DATA <= "01101";  -- 0xD
+      elsif (s_keypad_binary(4))  then O_KEYPAD_DATA <= "00001";  -- 0x1
+      elsif (s_keypad_binary(5))  then O_KEYPAD_DATA <= "00010";  -- 0x2
+      elsif (s_keypad_binary(6))  then O_KEYPAD_DATA <= "00011";  -- 0x3
+      elsif (s_keypad_binary(7))  then O_KEYPAD_DATA <= "01110";  -- 0xE
+      elsif (s_keypad_binary(8))  then O_KEYPAD_DATA <= "00100";  -- 0x4
+      elsif (s_keypad_binary(9))  then O_KEYPAD_DATA <= "00101";  -- 0x5
+      elsif (s_keypad_binary(10)) then O_KEYPAD_DATA <= "00110";  -- 0x6
+      elsif (s_keypad_binary(11)) then O_KEYPAD_DATA <= "01111";  -- 0xF
+      elsif (s_keypad_binary(12)) then O_KEYPAD_DATA <= "00111";  -- 0x7
+      elsif (s_keypad_binary(13)) then O_KEYPAD_DATA <= "01000";  -- 0x8
+      elsif (s_keypad_binary(14)) then O_KEYPAD_DATA <= "01001";  -- 0x9
+      elsif (s_keypad_binary(15)) then O_KEYPAD_DATA <= "10000";  -- Shift
+      elsif (s_keypad_binary(16)) then O_KEYPAD_DATA <= "00000";  -- 0x0
+      elsif (s_keypad_binary(17)) then O_KEYPAD_DATA <= "10001";  -- H
+      elsif (s_keypad_binary(18)) then O_KEYPAD_DATA <= "10010";  -- L
+      else                             O_KEYPAD_DATA <= "11111";  -- Undefined
+      end if;
     end if;
   end process KEYPAD_DATA_MAP;
   ------------------------------------------------------------------------------
