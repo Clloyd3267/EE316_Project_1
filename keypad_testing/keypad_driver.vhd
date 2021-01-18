@@ -55,7 +55,7 @@ end entity keypad_driver;
 --------------------------------
 --  Architecture Declaration  --
 --------------------------------
-architecture rtl of keypad_driver is
+architecture behavioral of keypad_driver is
 
   ----------------
   -- Components --
@@ -281,4 +281,4 @@ begin
   O_KEYPAD_COLS   <= s_keypad_cols;
   O_KEYPAD_BINARY <= s_keypad_binary_edge;
 
-end architecture rtl;
+end architecture behavioral;

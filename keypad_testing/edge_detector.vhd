@@ -39,7 +39,7 @@ end entity edge_detector;
 --------------------------------
 --  Architecture Declaration  --
 --------------------------------
-architecture rtl of edge_detector is
+architecture behavioral of edge_detector is
 
   -------------
   -- SIGNALS --
@@ -92,4 +92,4 @@ begin
   -- Assign final edge detection
   O_EDGE_SIGNAL <= s_signal_output;
 
-end architecture rtl;
+end architecture behavioral;

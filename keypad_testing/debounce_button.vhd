@@ -36,7 +36,7 @@ end entity debounce_button;
 --------------------------------
 --  Architecture Declaration  --
 --------------------------------
-architecture rtl of debounce_button is
+architecture behavioral of debounce_button is
 
   -------------
   -- SIGNALS --
@@ -88,4 +88,4 @@ begin
   -- Assign final debounced output
   O_BUTTON <= s_button_output;
 
-end architecture rtl;
+end architecture behavioral;
