@@ -21,23 +21,15 @@ library ieee;
 entity debounce_button is
 generic
 (
-  -- System clock frequency in MHz
-  C_CLK_FREQ_MHZ    : integer := 50;
-
-  -- Time required for button to remain stable in ms
-  C_STABLE_TIME_MS  : integer := 10
+  C_CLK_FREQ_MHZ   : integer := 50;  -- System clock frequency in MHz
+  C_STABLE_TIME_MS : integer := 10   -- Time required for button to remain stable in ms
 );
 port
 (
-  -- Clocks & Resets
-  I_RESET_N : in std_logic;
-  I_CLK     : in std_logic;
-
-  -- Button data
-  I_BUTTON  : in std_logic;
-
-  -- Debounced button data
-  O_BUTTON  : out std_logic
+  I_CLK            : in std_logic;  -- System clk frequency of (C_CLK_FREQ_MHZ)
+  I_RESET_N        : in std_logic;  -- System reset (active low)
+  I_BUTTON         : in std_logic;  -- Button data to be debounced
+  O_BUTTON         : out std_logic  -- Debounced button data
 );
 end entity debounce_button;
 
@@ -62,33 +54,38 @@ begin
   -- Description      : Process to debounce an input from push button.
   ------------------------------------------------------------------------------
   DEBOUNCE_CNTR: process (I_CLK, I_RESET_N)
-    variable v_max_count      : integer := C_CLK_FREQ_MHZ * C_STABLE_TIME_MS * 1000;
-    variable v_debounce_count : integer range 0 TO v_max_count := '0';
+    variable v_debounce_max_count : integer := C_CLK_FREQ_MHZ * C_STABLE_TIME_MS * 1000;
+    variable v_debounce_counter   : integer range 0 TO v_debounce_max_count := 0;
   begin
     if (I_RESET_N = '0') then
-      v_debounce_count   := '0';
+      v_debounce_counter :=  0;
       s_button_output    <= '0';
       s_button_previous  <= '0';
 
     elsif (rising_edge(I_CLK)) then
-      -- Counter logic (while signal has not changed, increment counter)
-      if (s_button_previous xor I_BUTTON) then
-        v_debounce_count := '0';
+      -- Output logic (output when input has been stable for counter period)
+      if (v_debounce_counter = v_debounce_max_count) then
+        s_button_output <= I_BUTTON;
       else
-        v_debounce_count := v_debounce_count + 1;
+        s_button_output <= s_button_output;
       end if;
 
-      -- Output logic (output when input has been stable for counter period)
-      if (v_debounce_count = v_max_count) then
-        s_button_output  <= I_BUTTON;
+      -- Counter logic (while signal has not changed, increment counter)
+      if (s_button_previous xor I_BUTTON) then
+        v_debounce_counter := 0;
+      elsif (v_debounce_counter = v_debounce_max_count) then
+        v_debounce_counter := 0;
       else
-        s_button_output  <= s_button_output;
+        v_debounce_counter := v_debounce_counter + 1;
       end if;
 
       -- Set previous value to current value
-      s_button_previous  <= I_BUTTON;
+      s_button_previous <= I_BUTTON;
     end if;
   end process DEBOUNCE_CNTR;
   ------------------------------------------------------------------------------
 
+  -- Assign final debounced output
   O_BUTTON <= s_button_output;
+
+end architecture rtl;

@@ -8,6 +8,10 @@
 -- Description  : Driver code to return a binary representation of the output
 --                of a 16 button keypad.
 --------------------------------------------------------------------------------
+-- TODO:
+-- -> Add constant for scan time
+-- -> Add edge triggering and is button pressed logic
+-- -> Test for multiple keys
 
 -----------------
 --  Libraries  --
@@ -20,19 +24,29 @@ library ieee;
 --  Entity  --
 --------------
 entity keypad_driver is
+generic
+(
+  C_CLK_FREQ_MHZ   : integer := 50;  -- System clock frequency in MHz
+  C_STABLE_TIME_MS : integer := 10;  -- Time required for button to remain stable in ms
+  C_SCAN_TIME_US   : integer := 2;   -- Time required for column power to fully settle in us
+
+  -- Dimensions of matrix keypad
+  C_NUM_ROWS       : integer := 4;
+  C_NUM_COLS       : integer := 4
+);
 port
 (
-  -- Clocks & Resets
-  I_CLK_125MHZ    : in std_logic;
+  I_CLK            : in std_logic;  -- System clk frequency of (C_CLK_FREQ_MHZ)
+  I_RESET_N        : in std_logic;  -- System reset (active low)
 
   -- Keypad Inputs (rows)
-  I_KEYPAD_ROWS   : in std_logic_vector(3 downto 0);
+  I_KEYPAD_ROWS    : in std_logic_vector((C_NUM_ROWS-1) downto 0);
 
   -- Keypad Outputs (cols)
-  O_KEYPAD_COLS   : out std_logic_vector(3 downto 0);
+  O_KEYPAD_COLS    : out std_logic_vector((C_NUM_COLS-1) downto 0);
 
-  -- 4 bit binary representation of keypad state (output of entity)
-  O_KEYPAD_BINARY : out std_logic_vector(3 downto 0)
+  -- Binary representation of keypad state
+  O_KEYPAD_BINARY  : out std_logic_vector(((C_NUM_ROWS * C_NUM_COLS)-1) downto 0)
 );
 end entity keypad_driver;
 
@@ -41,56 +55,99 @@ end entity keypad_driver;
 --------------------------------
 architecture rtl of keypad_driver is
 
+  ----------------
+  -- Components --
+  ----------------
+  component debounce_button is
+  generic
+  (
+    C_CLK_FREQ_MHZ   : integer := 50;  -- System clock frequency in MHz
+    C_STABLE_TIME_MS : integer := 10   -- Time required for button to remain stable in ms
+  );
+  port
+  (
+    I_CLK            : in std_logic;  -- System clk frequency of (C_CLK_FREQ_MHZ)
+    I_RESET_N        : in std_logic;  -- System reset (active low)
+    I_BUTTON         : in std_logic;  -- Button data to be debounced
+    O_BUTTON         : out std_logic  -- Debounced button data
+  );
+  end component debounce_button;
+
   -------------
   -- SIGNALS --
   -------------
 
-  -- Keypad counter and enable to account for delay time
-  signal s_keypad_enable      : std_logic := '0';
-  signal s_keypad_enable_cntr : unsigned(7 downto 0) := "00000000";
+  -- Keypad enable to account for delay time powering columns
+  signal s_keypad_enable           : std_logic := '0';
 
-  -- State related signals
-  type t_STATE is (IDLE_STATE,
-                   COL1_POWER_STATE, COL1_READ_STATE,
-                   COL2_POWER_STATE, COL2_READ_STATE,
-                   COL3_POWER_STATE, COL3_READ_STATE,
-                   COL4_POWER_STATE, COL4_READ_STATE);
-  signal s_keypad_state       : t_STATE := IDLE_STATE;
+  -- State machine related signals
+  type t_STATE is (IDLE_STATE, COL_POWER_STATE, COL_READ_STATE);
+  signal s_keypad_state            : t_STATE := IDLE_STATE;
+
+  -- Column index counter
+  signal s_col_index_counter       : integer range 0 TO (C_NUM_COLS-1) := 0;
 
   -- Signals to allow current state of columns to be read as well as written to
-  signal s_keypad_col_1       : std_logic := '0';
-  signal s_keypad_col_2       : std_logic := '0';
-  signal s_keypad_col_3       : std_logic := '0';
-  signal s_keypad_col_4       : std_logic := '0';
+  signal s_keypad_cols             : std_logic_vector((C_NUM_COLS-1) downto 0);
 
-  -- 4 bit binary representation of keypad state (output of entity)
-  signal s_keypad_binary      : std_logic_vector(3 downto 0);
+  -- Binary representation of keypad state (undebounced)
+  signal s_keypad_binary           : std_logic_vector(((C_NUM_ROWS * C_NUM_COLS)-1) downto 0);
 
-  -- Binary signal used to store whether a button has been pressed or not
-  signal s_button_pressed     : std_logic;
+  -- Binary representation of keypad state (debounced)
+  signal s_keypad_binary_debounced : std_logic_vector(((C_NUM_ROWS * C_NUM_COLS)-1) downto 0);
 
 begin
 
+  -- Debounce keypad outputs
+  keypad_debounce: for i in 0 to ((C_NUM_ROWS * C_NUM_COLS)-1) generate
+    debounce_keys: debounce_button
+      generic map
+      (
+        C_CLK_FREQ_MHZ   => C_CLK_FREQ_MHZ,
+        C_STABLE_TIME_MS => C_STABLE_TIME_MS
+      )
+      port map
+      (
+        I_CLK     => I_CLK,
+        I_RESET_N => I_RESET_N,
+        I_BUTTON  => s_keypad_binary(i),
+        O_BUTTON  => s_keypad_binary_debounced(i)
+      );
+  end generate keypad_debounce;
+
   ------------------------------------------------------------------------------
   -- Process Name     : KEYPAD_EN_CNTR
-  -- Sensitivity List : I_CLK_125MHZ    : 125 MHz global clock
+  -- Sensitivity List : I_CLK           : System clock
+  --                    I_RESET_N       : System reset (active low logic)
   -- Useful Outputs   : s_keypad_enable : Enable line to allow state to change
   --                                      in KEYPAD_STATE_MACHINE process
   --                                      (active high enable logic)
   -- Description      : Counter to delay the powering of the columns to negate
-  --                    the delay of the Hardware. Every 11111111b (255) clock
-  --                    ticks (~2 us), s_keypad_enable gets driven high to
-  --                    allow for state change in KEYPAD_STATE_MACHINE process.
+  --                    the delay of the Hardware. Every (C_SCAN_TIME_US) us,
+  --                    s_keypad_enable gets driven high to allow for state
+  --                    change in KEYPAD_STATE_MACHINE process.
   ------------------------------------------------------------------------------
-  KEYPAD_EN_CNTR: process (I_CLK_125MHZ)
+  KEYPAD_EN_CNTR: process (I_CLK, I_RESET_N)
+    variable v_keypad_en_max_count : integer := C_CLK_FREQ_MHZ * C_SCAN_TIME_US;
+    variable v_keypad_en_counter   : integer range 0 TO v_keypad_en_max_count := 0;
   begin
-    if (rising_edge(I_CLK_125MHZ)) then
-      s_keypad_enable_cntr  <= s_keypad_enable_cntr + 1;
+    if (I_RESET_N = '0') then
+      v_keypad_en_counter :=  0;
+      s_keypad_enable     <= '0';
 
-      if (s_keypad_enable_cntr = "11111111") then  -- Max count 255 (~2 us)
-        s_keypad_enable     <= '1';
+    elsif (rising_edge(I_CLK)) then
+      -- Only send enable signal on max count
+      if (v_keypad_en_counter = v_keypad_en_max_count) then
+        s_keypad_enable <= '1';
       else
-        s_keypad_enable     <= '0';
+        s_keypad_enable <= '0';
+      end if;
+
+      -- Counter logic
+      if (v_keypad_en_counter = v_keypad_en_max_count) then
+        v_keypad_en_counter :=  0;
+      else
+        v_keypad_en_counter := v_keypad_en_counter + 1;
       end if;
     end if;
   end process KEYPAD_EN_CNTR;
@@ -98,48 +155,48 @@ begin
 
   ------------------------------------------------------------------------------
   -- Process Name     : KEYPAD_STATE_MACHINE
-  -- Sensitivity List : I_CLK_125MHZ    : 125 MHz global clock
-  -- Useful Outputs   : s_keypad_state  : Current state of keypad state machine.
-  --                                      Used to control read and write of row
-  --                                      and cols in KEYPAD_TO_BINARY process.
+  -- Sensitivity List : I_CLK               : System clock
+  --                    I_RESET_N           : System reset (active low logic)
+  -- Useful Outputs   : s_keypad_state      : Current state of keypad state machine
+  --                    s_col_index_counter : Index of current column
   -- Description      : State machine to control different states for power and
-  --                    and read of rows and cols. Always a power state then a
-  --                    read state.
+  --                    and read of cols.
   ------------------------------------------------------------------------------
-  KEYPAD_STATE_MACHINE: process (I_CLK_125MHZ)
+  KEYPAD_STATE_MACHINE: process (I_CLK, I_RESET_N)
   begin
-    if (rising_edge(I_CLK_125MHZ)) then
+    if (I_RESET_N = '0') then
+      s_keypad_state      <= IDLE_STATE;
+      s_col_index_counter <= 0;
+
+    elsif (rising_edge(I_CLK)) then
+
+      -- Column state machine logic
       if (s_keypad_enable = '1') then
         case s_keypad_state is
           when IDLE_STATE =>
-              s_keypad_state  <= COL1_POWER_STATE;
+              s_keypad_state <= COL_POWER_STATE;
 
-          when COL1_POWER_STATE =>
-              s_keypad_state  <= COL1_READ_STATE;
-          when COL1_READ_STATE =>
-              s_keypad_state  <= COL2_POWER_STATE;
+          when COL_POWER_STATE =>
+              s_keypad_state <= COL_READ_STATE;
 
-          when COL2_POWER_STATE =>
-              s_keypad_state  <= COL2_READ_STATE;
-          when COL2_READ_STATE =>
-              s_keypad_state  <= COL3_POWER_STATE;
+          when COL_READ_STATE =>
+              s_keypad_state <= COL_POWER_STATE;
 
-          when COL3_POWER_STATE =>
-              s_keypad_state  <= COL3_READ_STATE;
-          when COL3_READ_STATE =>
-              s_keypad_state  <= COL4_POWER_STATE;
-
-          when COL4_POWER_STATE =>
-              s_keypad_state  <= COL4_READ_STATE;
-          when COL4_READ_STATE =>
-              s_keypad_state  <= COL1_POWER_STATE;
+              -- Counter logic to increment column
+              if (s_col_index_counter = (C_NUM_COLS-1)) then
+                s_col_index_counter <= 0;
+              else
+                s_col_index_counter <= s_col_index_counter + 1;
+              end if;
 
           -- Error condition, should never occur
           when others =>
-            s_keypad_state    <= IDLE_STATE;
+            s_keypad_state      <= IDLE_STATE;
+            s_col_index_counter <= 0;
         end case;
       else
-        s_keypad_state        <= s_keypad_state;
+        s_keypad_state      <= s_keypad_state;
+        s_col_index_counter <= s_col_index_counter;
       end if;
     end if;
   end process KEYPAD_STATE_MACHINE;
@@ -147,137 +204,44 @@ begin
 
   ------------------------------------------------------------------------------
   -- Process Name     : KEYPAD_TO_BINARY
-  -- Sensitivity List : I_CLK_125MHZ    : 125 MHz global clock
-  -- Useful Outputs   : s_keypad_binary : 4 bit binary representation of keypad
-  --                                      state (output of entity).
+  -- Sensitivity List : I_CLK           : System clock
+  --                    I_RESET_N       : System reset (active low logic)
+  -- Useful Outputs   : s_keypad_binary : Binary representation of keypad state
   -- Description      : Entity to control the powering and reading of the
-  --                    keypad rows and columns based on the current s_keypad_state.
+  --                    keypad columns and rows based on the current s_keypad_state.
   --                    Outputs the current binary number of keypad (0-15)
   ------------------------------------------------------------------------------
-  KEYPAD_TO_BINARY: process (I_CLK_125MHZ)
+  KEYPAD_TO_BINARY: process (I_CLK, I_RESET_N)
   begin
-    if ((rising_edge(I_CLK_125MHZ))) then
+    if (I_RESET_N = '0') then
+      s_keypad_cols   <= (others=>'0');
+      s_keypad_binary <= (others=>'0');
 
-      -- Power the Column 1
-      if (s_keypad_state = COL1_POWER_STATE) then
-        s_keypad_col_1    <= '1';
-        s_keypad_col_2    <= '0';
-        s_keypad_col_3    <= '0';
-        s_keypad_col_4    <= '0';
+    elsif ((rising_edge(I_CLK))) then
 
-      -- Power the Column 2
-      elsif (s_keypad_state = COL2_POWER_STATE) then
-        s_keypad_col_1    <= '0';
-        s_keypad_col_2    <= '1';
-        s_keypad_col_3    <= '0';
-        s_keypad_col_4    <= '0';
-
-      -- Power the Column 3
-      elsif (s_keypad_state = COL3_POWER_STATE) then
-        s_keypad_col_1    <= '0';
-        s_keypad_col_2    <= '0';
-        s_keypad_col_3    <= '1';
-        s_keypad_col_4    <= '0';
-
-      -- Power the Column 4
-      elsif (s_keypad_state = COL4_POWER_STATE) then
-        s_keypad_col_1    <= '0';
-        s_keypad_col_2    <= '0';
-        s_keypad_col_3    <= '0';
-        s_keypad_col_4    <= '1';
-
+      -- Power the columns
+      if (s_keypad_state = COL_POWER_STATE) then
+        -- Only power current column
+        s_keypad_cols                      <= (others=>'0');
+        s_keypad_cols(s_col_index_counter) <= '1';
       else
-        s_keypad_col_1    <= s_keypad_col_1;
-        s_keypad_col_2    <= s_keypad_col_2;
-        s_keypad_col_3    <= s_keypad_col_3;
-        s_keypad_col_4    <= s_keypad_col_4;
+        s_keypad_cols                      <= s_keypad_cols;
       end if;
 
-      -- Col 1
-      if (s_keypad_state = COL1_READ_STATE) then
-        s_button_pressed <= '0'; -- Reset to 0 at start of "cycle"
-        if   (I_KEYPAD_ROWS(0) = '1') then
-          s_keypad_binary <= "0001";
-          s_button_pressed <= '1';
-        elsif (I_KEYPAD_ROWS(1) = '1') then
-          s_keypad_binary <= "0100";
-          s_button_pressed <= '1';
-        elsif (I_KEYPAD_ROWS(2) = '1') then
-          s_keypad_binary <= "0111";
-          s_button_pressed <= '1';
-        elsif (I_KEYPAD_ROWS(3) = '1') then
-          s_keypad_binary <= "1111";
-          s_button_pressed <= '1';
-        else
-          s_keypad_binary <= s_keypad_binary;
-        end if;
-
-      -- Col 2
-      elsif (s_keypad_state = COL2_READ_STATE) then
-        if    (I_KEYPAD_ROWS(0) = '1') then
-          s_keypad_binary <= "0010";
-          s_button_pressed <= '1';
-        elsif (I_KEYPAD_ROWS(1) = '1') then
-          s_keypad_binary <= "0101";
-          s_button_pressed <= '1';
-        elsif (I_KEYPAD_ROWS(2) = '1') then
-          s_keypad_binary <= "1000";
-          s_button_pressed <= '1';
-        elsif (I_KEYPAD_ROWS(3) = '1') then
-          s_keypad_binary <= "0000";
-          s_button_pressed <= '1';
-        else
-          s_keypad_binary <= s_keypad_binary;
-        end if;
-
-      -- Col 3
-      elsif (s_keypad_state = COL3_READ_STATE) then
-        if    (I_KEYPAD_ROWS(0) = '1') then
-          s_keypad_binary <= "0011";
-          s_button_pressed <= '1';
-        elsif (I_KEYPAD_ROWS(1) = '1') then
-          s_keypad_binary <= "0110";
-          s_button_pressed <= '1';
-        elsif (I_KEYPAD_ROWS(2) = '1') then
-          s_keypad_binary <= "1001";
-          s_button_pressed <= '1';
-        elsif (I_KEYPAD_ROWS(3) = '1') then
-          s_keypad_binary <= "1111";
-          s_button_pressed <= '1';
-        else
-          s_keypad_binary <= s_keypad_binary;
-        end if;
-
-      -- Col 4
-      elsif (s_keypad_state = COL4_READ_STATE) then
-        if    (I_KEYPAD_ROWS(0) = '1') then
-          s_keypad_binary <= "1111";
-          s_button_pressed <= '1';
-        elsif (I_KEYPAD_ROWS(1) = '1') then
-          s_keypad_binary <= "1111";
-          s_button_pressed <= '1';
-        elsif (I_KEYPAD_ROWS(2) = '1') then
-          s_keypad_binary <= "1111";
-          s_button_pressed <= '1';
-        elsif (I_KEYPAD_ROWS(3) = '1') then
-          s_keypad_binary <= "1111";
-          s_button_pressed <= '1';
-        else
-          if (s_button_pressed = '1') then
-            s_keypad_binary <= s_keypad_binary;
-          else
-            s_keypad_binary <= "1111";
-          end if;
-        end if;
+      -- Read row state
+      if (s_keypad_state = COL_READ_STATE) then
+        for row in 0 to (C_NUM_ROWS-1) loop
+          s_keypad_binary(row * s_col_index_counter) <= I_KEYPAD_ROWS(row);
+        end loop;
+      else
+        s_keypad_binary <= s_keypad_binary;
       end if;
     end if;
   end process KEYPAD_TO_BINARY;
   ------------------------------------------------------------------------------
 
-  O_KEYPAD_COLS(0) <= s_keypad_col_1;
-  O_KEYPAD_COLS(1) <= s_keypad_col_2;
-  O_KEYPAD_COLS(2) <= s_keypad_col_3;
-  O_KEYPAD_COLS(3) <= s_keypad_col_4;
-  O_KEYPAD_BINARY  <= s_keypad_binary;
+  -- Assign final outputs
+  O_KEYPAD_COLS   <= s_keypad_cols;
+  O_KEYPAD_BINARY <= s_keypad_binary_debounced;
 
 end architecture rtl;
