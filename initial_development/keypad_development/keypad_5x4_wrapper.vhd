@@ -118,7 +118,7 @@ architecture behavioral of keypad_5x4_wrapper is
 
   constant C_STABLE_TIME_MS : integer     := 5;       -- Time required for button to remain stable in ms
   constant C_SCAN_TIME_US   : integer     := 2;       -- Time required for column power to fully settle in us
-  constant C_TRIGGER_EDGE   : t_EDGE_TYPE := EITHER;  -- Edge to trigger on
+  constant C_TRIGGER_EDGE   : t_EDGE_TYPE := RISING;  -- Edge to trigger on
 
   -- Dimensions of matrix keypad
   constant C_NUM_ROWS       : integer     := 5;
