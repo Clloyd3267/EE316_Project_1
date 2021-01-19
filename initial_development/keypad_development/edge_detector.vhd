@@ -25,7 +25,7 @@ entity edge_detector is
 generic
 (
   C_CLK_FREQ_MHZ   : integer     := 50;   -- System clock frequency in MHz
-  C_TRIGGER_EDGE   : t_EDGE_TYPE := NONE  -- Edge to trigger on
+  C_TRIGGER_EDGE   : T_EDGE_TYPE := NONE  -- Edge to trigger on
 );
 port
 (

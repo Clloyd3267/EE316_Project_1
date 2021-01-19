@@ -93,7 +93,7 @@ architecture behavioral of keypad_5x4_wrapper is
     C_CLK_FREQ_MHZ   : integer;      -- System clock frequency in MHz
     C_STABLE_TIME_MS : integer;      -- Time required for button to remain stable in ms
     C_SCAN_TIME_US   : integer;      -- Time required for column power to fully settle in us
-    C_TRIGGER_EDGE   : t_EDGE_TYPE;  -- Edge to trigger on
+    C_TRIGGER_EDGE   : T_EDGE_TYPE;  -- Edge to trigger on
 
     -- Dimensions of matrix keypad
     C_NUM_ROWS       : integer;
@@ -118,7 +118,7 @@ architecture behavioral of keypad_5x4_wrapper is
 
   constant C_STABLE_TIME_MS : integer     := 5;       -- Time required for button to remain stable in ms
   constant C_SCAN_TIME_US   : integer     := 2;       -- Time required for column power to fully settle in us
-  constant C_TRIGGER_EDGE   : t_EDGE_TYPE := RISING;  -- Edge to trigger on
+  constant C_TRIGGER_EDGE   : T_EDGE_TYPE := RISING;  -- Edge to trigger on
 
   -- Dimensions of matrix keypad
   constant C_NUM_ROWS       : integer     := 5;

@@ -19,5 +19,5 @@ library ieee;
 --  Package  --
 ---------------
 package edge_detector_utilities is
-  type t_EDGE_TYPE is (RISING, FALLING, EITHER, NONE);
+  type T_EDGE_TYPE is (RISING, FALLING, EITHER, NONE);
 end package edge_detector_utilities;
