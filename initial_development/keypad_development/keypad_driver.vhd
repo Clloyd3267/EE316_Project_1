@@ -8,8 +8,6 @@
 -- Description  : Driver code to return a binary representation of the output
 --                of a NxM button keypad.
 --------------------------------------------------------------------------------
--- TODO:
--- -> Test for multiple keys
 
 -----------------
 --  Libraries  --
@@ -166,15 +164,15 @@ begin
     variable v_keypad_en_counter   : integer range 0 TO v_keypad_en_max_count := 0;
   begin
     if (I_RESET_N = '0') then
-      v_keypad_en_counter :=  0;
-      s_scan_toggle       <= '0';
+      v_keypad_en_counter   :=  0;
+      s_scan_toggle         <= '0';
 
     elsif (rising_edge(I_CLK)) then
       -- Only send enable signal on max count
       if (v_keypad_en_counter = v_keypad_en_max_count) then
-        s_scan_toggle     <= '1';
+        s_scan_toggle       <= '1';
       else
-        s_scan_toggle     <= '0';
+        s_scan_toggle       <= '0';
       end if;
 
       -- Counter logic
@@ -204,7 +202,7 @@ begin
 
     elsif (rising_edge(I_CLK)) then
       -- Ensure keypad module is enabled
-      if (not I_KEYPAD_ENABLE) then
+      if (I_KEYPAD_ENABLE = '0') then
         s_keypad_state      <= IDLE_STATE;
         s_col_index_counter <= 0;
       else
@@ -270,7 +268,8 @@ begin
       -- Read row state
       if (s_keypad_state = COL_READ_STATE) then
         for row in 0 to (C_NUM_ROWS-1) loop
-          s_keypad_binary_inital(row * s_col_index_counter) <= I_KEYPAD_ROWS(row);
+          -- Set input of (R, C) to output (index) (2D -> 1D)
+          s_keypad_binary_inital(4*row + s_col_index_counter) <= I_KEYPAD_ROWS(row);
         end loop;
       else
         s_keypad_binary_inital <= s_keypad_binary_inital;

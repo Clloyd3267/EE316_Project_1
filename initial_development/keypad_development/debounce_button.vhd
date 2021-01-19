@@ -71,7 +71,7 @@ begin
       end if;
 
       -- Counter logic (while signal has not changed, increment counter)
-      if (s_button_previous xor I_BUTTON) then
+      if ((s_button_previous = '1') xor (I_BUTTON = '1')) then
         v_debounce_counter := 0;
       elsif (v_debounce_counter = v_debounce_max_count) then
         v_debounce_counter := 0;

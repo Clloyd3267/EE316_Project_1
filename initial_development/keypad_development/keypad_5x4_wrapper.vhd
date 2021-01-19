@@ -5,7 +5,20 @@
 -- Due Date     : 2021-01-28
 -- Target Board : Altera DE2 Devkit
 -- Entity       : keypad_5by4_wrapper
--- Description  : Wrapper for 5x4 keypad.
+-- Description  : Wrapper for 5x4 keypad driver.
+--
+--                Assumes (5x4) keypad in the form:
+--                +-------+-------+-------+-------+
+--                |   A   |   B   |   C   |   D   |
+--                +-------+-------+-------+-------+
+--                |   1   |   2   |   3   |   E   |
+--                +-------+-------+-------+-------+
+--                |   4   |   5   |   6   |   F   |
+--                +-------+-------+-------+-------+
+--                |   7   |   8   |   9   | SHIFT |
+--                +-------+-------+-------+-------+
+--                |   0   |   H   |   L   |       |
+--                +-------+-------+-------+-------+
 --------------------------------------------------------------------------------
 
 -----------------
@@ -105,11 +118,11 @@ architecture behavioral of keypad_5x4_wrapper is
 
   constant C_STABLE_TIME_MS : integer     := 5;       -- Time required for button to remain stable in ms
   constant C_SCAN_TIME_US   : integer     := 2;       -- Time required for column power to fully settle in us
-  constant C_TRIGGER_EDGE   : t_EDGE_TYPE := RISING;  -- Edge to trigger on
+  constant C_TRIGGER_EDGE   : t_EDGE_TYPE := EITHER;  -- Edge to trigger on
 
   -- Dimensions of matrix keypad
   constant C_NUM_ROWS       : integer     := 5;
-  constant C_NUM_COLS       : integer     := 4
+  constant C_NUM_COLS       : integer     := 4;
 
   -------------
   -- SIGNALS --
@@ -120,6 +133,7 @@ architecture behavioral of keypad_5x4_wrapper is
 
   -- Keypad scan column toggle to account for delay time powering columns
   signal s_keypad_binary    : std_logic_vector(((C_NUM_ROWS * C_NUM_COLS)-1) downto 0);
+  signal s_keypad_data      : std_logic_vector(4 downto 0);
 
 begin
   -- Device driver for keypad
@@ -133,7 +147,7 @@ begin
     C_NUM_ROWS       => C_NUM_ROWS,
     C_NUM_COLS       => C_NUM_COLS
   )
-  port
+  port map
   (
     I_CLK            => I_CLK,
     I_RESET_N        => I_RESET_N,
@@ -147,49 +161,56 @@ begin
   -- Process Name     : KEYPAD_DATA_MAP
   -- Sensitivity List : I_CLK         : System clock
   --                    I_RESET_N     : System reset (active low logic)
-  -- Useful Outputs   : O_KEYPRESSED  : Trigger indicating (O_KEYPAD_DATA) is valid
-  --                    O_KEYPAD_DATA : Data from button press
-  -- Description      : Maps raw edge inputs from keypad driver to a more user friendly data and
-  --                    trigger outputs.
+  -- Useful Outputs   : O_KEYPRESSED  : Trigger indicating (s_keypad_data) is valid
+  --                    s_keypad_data : Data from button press
+  -- Description      : Maps raw edge inputs from keypad driver to a more user
+  --                    friendly data and trigger outputs.
   ------------------------------------------------------------------------------
   KEYPAD_DATA_MAP: process (I_CLK, I_RESET_N)
   begin
     if (I_RESET_N = '0') then
       s_keypad_enable <= '0';
       O_KEYPRESSED    <= '0';
-      O_KEYPAD_DATA   <= (others=>'0');
+      s_keypad_data   <= (others=>'0');
 
     elsif (rising_edge(I_CLK)) then
+      -- Enable the keypad
       s_keypad_enable <= '1';
 
-      -- Check if button pressed
-      O_KEYPRESSED <= or s_keypad_binary;
+      -- Check if a button is pressed
+		if (to_integer(unsigned(s_keypad_binary)) = 0) then
+		  O_KEYPRESSED <= '0';
+		else
+		  O_KEYPRESSED <= '1';
+		 end if;
 
-      -- Map keypad data
-      -- CDL=> Convert to BIT_HEX for readablity
-      if    (s_keypad_binary(0))  then O_KEYPAD_DATA <= "01010";  -- 0xA
-      elsif (s_keypad_binary(1))  then O_KEYPAD_DATA <= "01011";  -- 0xB
-      elsif (s_keypad_binary(2))  then O_KEYPAD_DATA <= "01100";  -- 0xC
-      elsif (s_keypad_binary(3))  then O_KEYPAD_DATA <= "01101";  -- 0xD
-      elsif (s_keypad_binary(4))  then O_KEYPAD_DATA <= "00001";  -- 0x1
-      elsif (s_keypad_binary(5))  then O_KEYPAD_DATA <= "00010";  -- 0x2
-      elsif (s_keypad_binary(6))  then O_KEYPAD_DATA <= "00011";  -- 0x3
-      elsif (s_keypad_binary(7))  then O_KEYPAD_DATA <= "01110";  -- 0xE
-      elsif (s_keypad_binary(8))  then O_KEYPAD_DATA <= "00100";  -- 0x4
-      elsif (s_keypad_binary(9))  then O_KEYPAD_DATA <= "00101";  -- 0x5
-      elsif (s_keypad_binary(10)) then O_KEYPAD_DATA <= "00110";  -- 0x6
-      elsif (s_keypad_binary(11)) then O_KEYPAD_DATA <= "01111";  -- 0xF
-      elsif (s_keypad_binary(12)) then O_KEYPAD_DATA <= "00111";  -- 0x7
-      elsif (s_keypad_binary(13)) then O_KEYPAD_DATA <= "01000";  -- 0x8
-      elsif (s_keypad_binary(14)) then O_KEYPAD_DATA <= "01001";  -- 0x9
-      elsif (s_keypad_binary(15)) then O_KEYPAD_DATA <= "10000";  -- Shift
-      elsif (s_keypad_binary(16)) then O_KEYPAD_DATA <= "00000";  -- 0x0
-      elsif (s_keypad_binary(17)) then O_KEYPAD_DATA <= "10001";  -- H
-      elsif (s_keypad_binary(18)) then O_KEYPAD_DATA <= "10010";  -- L
-      else                             O_KEYPAD_DATA <= "11111";  -- Undefined
+      -- Map keypad data (See above table for mapping)
+      if    (s_keypad_binary(0) = '1')  then s_keypad_data <= "01010";        -- 0xA
+      elsif (s_keypad_binary(1) = '1')  then s_keypad_data <= "01011";        -- 0xB
+      elsif (s_keypad_binary(2) = '1')  then s_keypad_data <= "01100";        -- 0xC
+      elsif (s_keypad_binary(3) = '1')  then s_keypad_data <= "01101";        -- 0xD
+      elsif (s_keypad_binary(4) = '1')  then s_keypad_data <= "00001";        -- 0x1
+      elsif (s_keypad_binary(5) = '1')  then s_keypad_data <= "00010";        -- 0x2
+      elsif (s_keypad_binary(6) = '1')  then s_keypad_data <= "00011";        -- 0x3
+      elsif (s_keypad_binary(7) = '1')  then s_keypad_data <= "01110";        -- 0xE
+      elsif (s_keypad_binary(8) = '1')  then s_keypad_data <= "00100";        -- 0x4
+      elsif (s_keypad_binary(9) = '1')  then s_keypad_data <= "00101";        -- 0x5
+      elsif (s_keypad_binary(10) = '1') then s_keypad_data <= "00110";        -- 0x6
+      elsif (s_keypad_binary(11) = '1') then s_keypad_data <= "01111";        -- 0xF
+      elsif (s_keypad_binary(12) = '1') then s_keypad_data <= "00111";        -- 0x7
+      elsif (s_keypad_binary(13) = '1') then s_keypad_data <= "01000";        -- 0x8
+      elsif (s_keypad_binary(14) = '1') then s_keypad_data <= "01001";        -- 0x9
+      elsif (s_keypad_binary(15) = '1') then s_keypad_data <= "10000";        -- Shift
+      elsif (s_keypad_binary(16) = '1') then s_keypad_data <= "00000";        -- 0x0
+      elsif (s_keypad_binary(17) = '1') then s_keypad_data <= "10001";        -- H
+      elsif (s_keypad_binary(18) = '1') then s_keypad_data <= "10010";        -- L
+      else                                   s_keypad_data <= s_keypad_data;  -- Undefined
       end if;
     end if;
   end process KEYPAD_DATA_MAP;
   ------------------------------------------------------------------------------
+
+  -- Assign final outputs
+  O_KEYPAD_DATA <= s_keypad_data;
 
 end architecture behavioral;
