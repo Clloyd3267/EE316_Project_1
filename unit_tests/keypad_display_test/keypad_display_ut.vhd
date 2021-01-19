@@ -42,7 +42,7 @@ architecture behavioral of keypad_display_ut is
   component seven_seg_driver is
   generic
   (
-    C_CLK_FREQ_MHZ : integer                           -- System clock frequency in MHz
+    C_CLK_FREQ_MHZ   : integer                           -- System clock frequency in MHz
   );
   port
   (
