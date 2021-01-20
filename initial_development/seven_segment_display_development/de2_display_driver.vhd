@@ -29,8 +29,8 @@ port
   I_CLK            : in std_logic;                      -- System clk frequency of (C_CLK_FREQ_MHZ)
   I_RESET_N        : in std_logic;                      -- System reset (active low)
   I_DISPLAY_ENABLE : in std_logic;                      -- Control to enable or blank the display
-  I_DATA_BITS      : in std_logic_vector(15 downto 0);  -- Input data (data) to display
-  I_ADDR_BITS      : in std_logic_vector(7 downto 0);   -- Input data (address) to display
+  I_DATA_BITS      : in std_logic_vector(15 downto 0);  -- Input data to display
+  I_ADDR_BITS      : in std_logic_vector(7 downto 0);   -- Input address to display
   O_HEX0_N         : out std_logic_vector(6 downto 0);  -- Segment data for seven segment display 0
   O_HEX1_N         : out std_logic_vector(6 downto 0);  -- Segment data for seven segment display 1
   O_HEX2_N         : out std_logic_vector(6 downto 0);  -- Segment data for seven segment display 2
