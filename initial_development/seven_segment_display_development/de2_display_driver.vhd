@@ -76,7 +76,7 @@ begin
     I_CLK            => I_CLK,
     I_RESET_N        => I_RESET_N,
     I_DISPLAY_ENABLE => I_DISPLAY_ENABLE,
-    I_DATA_NIBBLE    => I_DATA_NIBBLE(3 downto 0),
+    I_DATA_NIBBLE    => I_DATA_BITS(3 downto 0),
     O_SEGMENT_N      => O_HEX0_N
   );
 
@@ -91,7 +91,7 @@ begin
     I_CLK            => I_CLK,
     I_RESET_N        => I_RESET_N,
     I_DISPLAY_ENABLE => I_DISPLAY_ENABLE,
-    I_DATA_NIBBLE    => I_DATA_NIBBLE(7 downto 0),
+    I_DATA_NIBBLE    => I_DATA_BITS(7 downto 4),
     O_SEGMENT_N      => O_HEX1_N
   );
 
@@ -106,7 +106,7 @@ begin
     I_CLK            => I_CLK,
     I_RESET_N        => I_RESET_N,
     I_DISPLAY_ENABLE => I_DISPLAY_ENABLE,
-    I_DATA_NIBBLE    => I_DATA_NIBBLE(11 downto 8),
+    I_DATA_NIBBLE    => I_DATA_BITS(11 downto 8),
     O_SEGMENT_N      => O_HEX2_N
   );
 
@@ -121,7 +121,7 @@ begin
     I_CLK            => I_CLK,
     I_RESET_N        => I_RESET_N,
     I_DISPLAY_ENABLE => I_DISPLAY_ENABLE,
-    I_DATA_NIBBLE    => I_DATA_NIBBLE(15 downto 12),
+    I_DATA_NIBBLE    => I_DATA_BITS(15 downto 12),
     O_SEGMENT_N      => O_HEX3_N
   );
 

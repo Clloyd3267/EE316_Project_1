@@ -62,6 +62,15 @@ architecture behavioral of rom_display_ut is
     O_HEX5_N         : out std_logic_vector(6 downto 0)   -- Segment data for seven segment display 5
   );
   end component de2_display_driver;
+  
+  component rom_controller IS
+  port
+  (
+    address		     : IN STD_LOGIC_VECTOR (7 downto 0);
+    clock		     : IN std_logic  := '1';
+    q		         : OUT std_logic_vector (15 downto 0)
+  );
+  end component rom_controller;  
 
   ---------------
   -- Constants --
@@ -99,6 +108,16 @@ begin
     O_HEX3_N         => O_HEX3_N,
     O_HEX4_N         => O_HEX4_N,
     O_HEX5_N         => O_HEX5_N
+  );
+  
+  -- Rom controller to get data from read only memory
+  -- CDL=> ROM_CONTROLLER: rom_driver
+  ROM_DRIVER: rom_controller
+  port map
+  (
+    address          => s_addr_bits,
+	clock            => I_CLK,
+	q                => s_data_bits
   );
 
   ---------------
@@ -148,11 +167,11 @@ begin
   --                    controller.
   ------------------------------------------------------------------------------
   ROM_DISPLAY_TEST: process (I_CLK, I_RESET_N)
-    variable v_max_address     : unsigned := 255;
-    variable v_current_address : unsigned(7 downto 0) := 0;
+    variable v_max_address     : unsigned(7 downto 0) := to_unsigned(255, 8);
+    variable v_current_address : unsigned(7 downto 0) := (others=>'0');
   begin
     if (I_RESET_N = '0') then
-      v_current_address  := 0;
+      v_current_address  := (others=>'0');
       s_addr_bits <= (others=> '0');
 
     elsif (rising_edge(I_CLK)) then
