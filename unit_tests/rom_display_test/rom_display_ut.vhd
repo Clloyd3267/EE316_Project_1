@@ -1,5 +1,5 @@
 --------------------------------------------------------------------------------
--- Filename     : rom_display_ut
+-- Filename     : rom_display_ut.vhd
 -- Author(s)    : Chris Lloyd
 -- Class        : EE316 (Project 1)
 -- Due Date     : 2021-01-28
@@ -66,9 +66,9 @@ architecture behavioral of rom_display_ut is
   component rom_controller IS
   port
   (
-    address		     : IN STD_LOGIC_VECTOR (7 downto 0);
-    clock		     : IN std_logic  := '1';
-    q		         : OUT std_logic_vector (15 downto 0)
+    address		      : in std_logic_vector(7 downto 0);
+    clock		      : in std_logic  := '1';
+    q		            : out std_logic_vector(15 downto 0)
   );
   end component rom_controller;  
 
@@ -116,8 +116,8 @@ begin
   port map
   (
     address          => s_addr_bits,
-	clock            => I_CLK,
-	q                => s_data_bits
+	 clock            => I_CLK,
+	 q                => s_data_bits
   );
 
   ---------------
