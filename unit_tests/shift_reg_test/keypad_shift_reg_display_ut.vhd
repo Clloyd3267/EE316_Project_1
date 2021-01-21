@@ -1,13 +1,12 @@
 --------------------------------------------------------------------------------
--- Filename     : rom_display_ut.vhd
+-- Filename     : keypad_shift_reg_display_ut.vhd
 -- Author(s)    : Chris Lloyd
 -- Class        : EE316 (Project 1)
 -- Due Date     : 2021-01-28
 -- Target Board : Altera DE2 Devkit
--- Entity       : rom_display_ut
--- Description  : Unit Test (ut) to test the generated rom controller
---                (using Quartus MegaWizard tool) and seven segment displays
---                on the Altera DE2 Devkit.
+-- Entity       : keypad_shift_reg_display_ut
+-- Description  : Unit Test (ut) to test shift register functionality for the
+--                data and address input.
 --------------------------------------------------------------------------------
 
 -----------------
@@ -20,7 +19,7 @@ use IEEE.Numeric_std.all;
 --------------
 --  Entity  --
 --------------
-entity rom_display_ut is
+entity keypad_shift_reg_display_ut is
 port
 (
   I_CLK          : in std_logic;                      -- System clk frequency of (C_CLK_FREQ_MHZ)
@@ -34,12 +33,12 @@ port
   O_HEX4_N       : out std_logic_vector(6 downto 0);  -- Segment data for seven segment display 4
   O_HEX5_N       : out std_logic_vector(6 downto 0)   -- Segment data for seven segment display 5
 );
-end entity rom_display_ut;
+end entity keypad_shift_reg_display_ut;
 
 --------------------------------
 --  Architecture Declaration  --
 --------------------------------
-architecture behavioral of rom_display_ut is
+architecture behavioral of keypad_shift_reg_display_ut is
 
   ----------------
   -- Components --
@@ -65,21 +64,26 @@ architecture behavioral of rom_display_ut is
   );
   end component de2_display_driver;
 
-  -- Device driver for keypad
-  matrix_keypad_driver: keypad_5x4_wrapper
-  generic map
-  (
-    C_CLK_FREQ_MHZ   => C_CLK_FREQ_MHZ
-  )
-  port map
-  (
-    I_CLK            => I_CLK,
-    I_RESET_N        => I_RESET_N,
-    I_KEYPAD_ROWS    => I_KEYPAD_ROWS,
-    O_KEYPAD_COLS    => O_KEYPAD_COLS,
-    O_KEYPAD_DATA    => s_keypad_data,
-    O_KEYPRESSED     => s_keypressed
-  );
+  component keypad_5x4_wrapper is
+    generic
+    (
+      C_CLK_FREQ_MHZ   : integer      -- System clock frequency in MHz
+    );
+    port
+    (
+      I_CLK            : in std_logic;                      -- System clk frequency of (C_CLK_FREQ_MHZ)
+      I_RESET_N        : in std_logic;                      -- System reset (active low)
+      I_KEYPAD_ROWS    : in std_logic_vector(4 downto 0);   -- Keypad Inputs (rows)
+      O_KEYPAD_COLS    : out std_logic_vector(3 downto 0);  -- Keypad Outputs (cols)
+
+      -- Data of pressed key
+      -- 5th bit enabled indicates command button pressed
+      O_KEYPAD_DATA    : out std_logic_vector(4 downto 0);
+
+      -- Trigger to indicate a key was pressed (single clock cycle pulse)
+      O_KEYPRESSED     : out std_logic
+    );
+    end component keypad_5x4_wrapper;
 
   ---------------
   -- Constants --
