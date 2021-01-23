@@ -125,7 +125,7 @@ architecture behavioral of memory_control_top is
   signal s_address_cntr_forward     : std_logic; -- Direction of address counting (forward or reverse)
 
   -- State machine related signals
-  type t_MODE_STATE is (INIT_STATE, OP_STATE);
+  type t_MODE_STATE is (INIT_STATE, OP_STATE, PROG_STATE);
   signal s_current_mode   : t_MODE_STATE := INIT_STATE;
 
   -- Data buffer
@@ -141,6 +141,9 @@ architecture behavioral of memory_control_top is
 
   signal s_keypad_data    : std_logic_vector(4 downto 0);   -- Data from keypress
   signal s_keypressed     : std_logic;                      -- Whether a key was pressed
+  signal s_data_shift_reg : unsigned(15 downto 0);  -- Data to display
+  signal s_addr_shift_reg : unsigned(7 downto 0);   -- Address to display
+  signal s_addr_data_mode : std_logic;                      -- Signal to hold current entry mode (address = 1, data = 0)
 
 begin
 
@@ -195,7 +198,7 @@ begin
   ---------------
 
   ------------------------------------------------------------------------------
-  -- Process Name     : MODE_STATE_MACHINE
+  -- Process Name     : MODE_STATE_MACHINE  -- CDL=> Cleanup later
   -- Sensitivity List : I_CLK               : System clock
   --                    I_RESET_N           : System reset (active low logic)
   -- Useful Outputs   : s_current_mode      : Current mode of the system
@@ -208,20 +211,24 @@ begin
       s_current_mode      <= INIT_STATE;
 
     elsif (rising_edge(I_CLK)) then
-      case s_current_mode is
-        when INIT_STATE =>
-          if (s_current_address = C_MAX_ADDRESS) then
-            s_current_mode <= OP_STATE;
-          else
-            s_current_mode <= s_current_mode;
-          end if;
-        when OP_STATE =>
+      if (s_current_mode = INIT_STATE) then
+        if (s_current_address = C_MAX_ADDRESS) then
+          s_current_mode <= OP_STATE;
+        else
           s_current_mode <= s_current_mode;
+        end if;
 
-        -- Error condition, should never occur
-        when others =>
-          s_current_mode <= INIT_STATE;
-      end case;
+      elsif (s_current_mode = OP_STATE) and
+            (s_keypressed = '1' and s_keypad_data = "10000") then -- Shift key pressed
+        s_current_mode <= PROG_STATE;
+
+      elsif (s_current_mode = PROG_STATE) and
+            (s_keypressed = '1' and s_keypad_data = "10000") then -- Shift key pressed
+        s_current_mode <= OP_STATE;
+
+      else  -- Error condition, should never occur
+        s_current_mode <= s_current_mode;
+      end if;
     end if;
   end process MODE_STATE_MACHINE;
   ------------------------------------------------------------------------------
@@ -309,14 +316,25 @@ begin
     elsif (rising_edge(I_CLK)) then
       -- Enable (turn on) the display depending on mode
       if (s_current_mode = INIT_STATE) then
-        s_display_enable <= '1';
+        s_display_enable <= '0';
       else
         s_display_enable <= '1';
+      end if;
+
+      if (s_current_mode = OP_STATE) then
+        s_addr_bits <= std_logic_vector(s_current_address);
+        s_display_data_bits <= s_data_buffer(to_integer(s_current_address));
+      else
+        s_addr_bits <= s_addr_shift_reg;
+        s_display_data_bits <= s_data_shift_reg;
       end if;
 
       -- Control whether to get data from rom depending on mode
       if (s_current_mode = INIT_STATE) then
         s_data_buffer(to_integer(s_current_address)) <= s_rom_data_bits;
+      elsif (s_current_mode = PROG_STATE) and
+            (s_keypressed = '1' and s_keypad_data = "10010") then -- L key pressed
+        s_data_buffer(to_integer(s_addr_shift_reg)) <= s_data_shift_reg;
       else
         s_data_buffer <= s_data_buffer;
       end if;
@@ -328,8 +346,8 @@ begin
   -- Process Name     : ADDRESS_COUNTER_CONTROL
   -- Sensitivity List : I_CLK            : System clock
   --                    I_RESET_N        : System reset (active low logic)
-  -- Useful Outputs   :
-  --
+  -- Useful Outputs   : s_address_cntr_enabled
+  --                    s_address_cntr_forward
   -- Description      : A process to control address counter enable and
   --                    direction
   ------------------------------------------------------------------------------
@@ -359,7 +377,50 @@ begin
   end process ADDRESS_COUNTER_CONTROL;
   ------------------------------------------------------------------------------
 
-  s_addr_bits <= std_logic_vector(s_current_address);
-  s_display_data_bits <= s_data_buffer(to_integer(s_current_address));
+  ------------------------------------------------------------------------------
+  -- Process Name     : INPUT_SHIFT_REGISTER
+  -- Sensitivity List : I_CLK            : System clock
+  --                    I_RESET_N        : System reset (active low logic)
+  -- Useful Outputs   :
+  --
+  -- Description      : A process to control address counter enable and
+  --                    direction
+  ------------------------------------------------------------------------------
+  INPUT_SHIFT_REGISTER: process (I_CLK, I_RESET_N)
+  begin
+    if (I_RESET_N = '0') then
+      s_addr_data_mode                  <= '0';
+		  s_addr_shift_reg                  <= (others=>'0');
+		  s_data_shift_reg                  <= (others=>'0');
+
+    elsif (rising_edge(I_CLK)) then
+      if (s_current_mode = PROG_STATE) then
+        -- Toggle selected register
+        if (s_keypressed = '1' and s_keypad_data = "10001") then -- H key pressed
+          s_addr_data_mode                <= not s_addr_data_mode;
+        else
+          s_addr_data_mode                <= s_addr_data_mode;
+        end if;
+
+        -- Add data to register
+        if (s_keypressed = '1' and s_keypad_data(4) /= '1') then -- Data (0-F) key pressed
+          if (s_addr_data_mode = '0') then -- Address mode
+            s_addr_shift_reg(7 downto 4)  <= s_addr_shift_reg(3 downto 0);
+            s_addr_shift_reg(3 downto 0)  <= s_keypad_data(3 downto 0);
+          else                             -- Data mode
+            s_data_shift_reg(15 downto 4) <= s_data_shift_reg(11 downto 0);
+            s_data_shift_reg(3 downto 0)  <= s_keypad_data(3 downto 0);
+          end if;
+        else
+          s_addr_shift_reg                <= s_addr_shift_reg;
+          s_data_shift_reg                <= s_data_shift_reg;
+        end if;
+      else
+        s_addr_data_mode <= s_addr_data_mode;
+        s_addr_shift_reg <= s_addr_shift_reg;
+      end if;
+    end if;
+  end process INPUT_SHIFT_REGISTER;
+  ------------------------------------------------------------------------------
 
 end architecture behavioral;
