@@ -1,10 +1,10 @@
 --------------------------------------------------------------------------------
--- Filename     : clock_speed_ut.vhd
+-- Filename     : memory_control_top.vhd
 -- Author(s)    : Chris Lloyd
 -- Class        : EE316 (Project 1)
 -- Due Date     : 2021-01-28
 -- Target Board : Altera DE2 Devkit
--- Entity       : clock_speed_ut
+-- Entity       : memory_control_top
 -- Description  : Unit Test (ut) to test the use of different speeds to control
 --                the generated rom controller and seven segment displays
 --                on the Altera DE2 Devkit.
@@ -31,7 +31,7 @@ library work;
 --------------
 --  Entity  --
 --------------
-entity clock_speed_ut is
+entity memory_control_top is
 port
 (
   I_CLK          : in std_logic;                      -- System clk frequency of (C_CLK_FREQ_MHZ)
@@ -45,12 +45,12 @@ port
   O_HEX4_N       : out std_logic_vector(6 downto 0);  -- Segment data for seven segment display 4
   O_HEX5_N       : out std_logic_vector(6 downto 0)   -- Segment data for seven segment display 5
 );
-end entity clock_speed_ut;
+end entity memory_control_top;
 
 --------------------------------
 --  Architecture Declaration  --
 --------------------------------
-architecture behavioral of clock_speed_ut is
+architecture behavioral of memory_control_top is
 
   ----------------
   -- Components --
@@ -241,7 +241,7 @@ begin
 
     elsif (rising_edge(I_CLK)) then
 
-      if (s_address_cntr_enabled = '0')
+      if (s_address_cntr_enabled = '0') then
         s_address_toggle_cntr   <=  0;
         s_address_toggle        <= '0';
       else
@@ -281,7 +281,7 @@ begin
 
       -- Increment address
       if (s_address_toggle = '1') then
-        if (s_address_cntr_forward = '1')
+        if (s_address_cntr_forward = '1') then
           s_current_address <= s_current_address + 1;
         else
           s_current_address <= s_current_address - 1;
@@ -336,12 +336,12 @@ begin
   ADDRESS_COUNTER_CONTROL: process (I_CLK, I_RESET_N)
   begin
     if (I_RESET_N = '0') then
-      s_address_cntr_enabled <= '0';
-      s_address_cntr_forward <= '0';
+      s_address_cntr_enabled <= '1';
+      s_address_cntr_forward <= '1';
 
     elsif (rising_edge(I_CLK)) then
       -- Enable (turn on) the address counter depending on mode
-      if (s_current_mode = OP_STATE and
+      if (s_current_mode = OP_STATE) and
          (s_keypressed = '1' and s_keypad_data = "10001") then -- H key pressed
         s_address_cntr_enabled <= not s_address_cntr_enabled;
       else
