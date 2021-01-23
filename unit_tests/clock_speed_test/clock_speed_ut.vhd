@@ -89,14 +89,14 @@ architecture behavioral of clock_speed_ut is
 
   constant C_CLK_FREQ_MHZ    : integer := 50;                         -- System clock frequency in MHz
   constant C_1HZ_MAX_COUNT   : integer := C_CLK_FREQ_MHZ * 1000000;   -- Max count for 1 Hz counter
-  constant C_255HZ_MAX_COUNT : integer := C_CLK_FREQ_MHZ * 255000000; -- Max count for 255 Hz counter
+  constant C_255HZ_MAX_COUNT : integer := C_CLK_FREQ_MHZ * 4000; -- Max count for 255 Hz counter
   constant C_MAX_ADDRESS     : unsigned(7 downto 0) := to_unsigned(255, 8);
 
   -------------
   -- SIGNALS --
   -------------
 
-  signal s_address_toggle_cntr : integer range 0 TO C_255HZ_MAX_COUNT := 0;
+  signal s_address_toggle_cntr : integer range 0 TO C_1HZ_MAX_COUNT := 0;
   signal s_address_toggle      : std_logic; -- Address toggle signal
 
   -- State machine related signals
@@ -166,7 +166,7 @@ begin
     elsif (rising_edge(I_CLK)) then
       case s_current_mode is
         when INIT_STATE =>
-          if (s_current_address = C_MAX_ADDRESS)
+          if (s_current_address = C_MAX_ADDRESS) then
             s_current_mode <= OP_STATE;
           else
             s_current_mode <= s_current_mode;
@@ -192,7 +192,7 @@ begin
   ADDRESS_TOGGLE_COUNTER: process (I_CLK, I_RESET_N)
   begin
     if (I_RESET_N = '0') then
-      s_address_toggle_cntr   :=  0;
+      s_address_toggle_cntr   <=  0;
       s_address_toggle        <= '0';
 
     elsif (rising_edge(I_CLK)) then
@@ -207,9 +207,9 @@ begin
       -- Counter Logic
       if (s_current_mode = INIT_STATE and s_address_toggle_cntr = C_255HZ_MAX_COUNT) or
          (s_current_mode = OP_STATE and s_address_toggle_cntr = C_1HZ_MAX_COUNT) then
-        s_address_toggle_cntr := 0;
+        s_address_toggle_cntr <= 0;
       else
-        s_address_toggle_cntr := s_address_toggle_cntr + 1;
+        s_address_toggle_cntr <= s_address_toggle_cntr + 1;
       end if;
     end if;
   end process ADDRESS_TOGGLE_COUNTER;
@@ -225,15 +225,15 @@ begin
   ADDRESS_INCREMENT: process (I_CLK, I_RESET_N)
   begin
     if (I_RESET_N = '0') then
-      s_current_address  := (others=>'0');
+      s_current_address  <= (others=>'0');
 
     elsif (rising_edge(I_CLK)) then
 
       -- Increment address
       if (s_address_toggle = '1') then
-        s_current_address := s_current_address + 1;
+        s_current_address <= s_current_address + 1;
       else
-        s_current_address := s_current_address;
+        s_current_address <= s_current_address;
       end if;
     end if;
   end process ADDRESS_INCREMENT;
@@ -247,7 +247,7 @@ begin
   --                    s_display_enable : Digit enable for display
   -- Description      : A process to control where data goes depending on mode.
   ------------------------------------------------------------------------------
-  ADDRESS_INCREMENT: process (I_CLK, I_RESET_N)
+  DATA_FLOW_CONTROL: process (I_CLK, I_RESET_N)
   begin
     if (I_RESET_N = '0') then
       s_display_enable <= '0';
@@ -255,7 +255,7 @@ begin
     elsif (rising_edge(I_CLK)) then
       -- Enable (turn on) the display depending on mode
       if (s_current_mode = INIT_STATE) then
-        s_display_enable <= '0';
+        s_display_enable <= '1';
       else
         s_display_enable <= '1';
       end if;
@@ -267,7 +267,7 @@ begin
         s_data_buffer <= s_data_buffer;
       end if;
     end if;
-  end process ADDRESS_INCREMENT;
+  end process DATA_FLOW_CONTROL;
   ------------------------------------------------------------------------------
 
   s_addr_bits <= std_logic_vector(s_current_address);
