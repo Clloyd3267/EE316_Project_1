@@ -158,6 +158,8 @@ begin
     if (I_RESET_N = '0') then
       s_display_enable                  <= '0';
       s_addr_data_mode                  <= '0';
+		s_addr_shift_reg                  <= (others=>'0');
+		s_data_shift_reg                  <= (others=>'0');
 
     elsif (rising_edge(I_CLK)) then
       -- Enable (turn on) the display
@@ -172,12 +174,12 @@ begin
 
       -- Add data to register
       if (s_keypressed = '1' and s_keypad_data /= "10001") then -- Data (0-F) key pressed
-        if (s_addr_data_mode = '1') then -- Address mode
+        if (s_addr_data_mode = '0') then -- Address mode
           s_addr_shift_reg(7 downto 4)  <= s_addr_shift_reg(3 downto 0);
           s_addr_shift_reg(3 downto 0)  <= s_keypad_data(3 downto 0);
         else                             -- Data mode
           s_data_shift_reg(15 downto 4) <= s_data_shift_reg(11 downto 0);
-          s_data_shift_reg(3 downto 0)  <= s_data_shift_reg(3 downto 0);
+          s_data_shift_reg(3 downto 0)  <= s_keypad_data(3 downto 0);
         end if;
       else
         s_addr_shift_reg                <= s_addr_shift_reg;
