@@ -35,8 +35,7 @@ library work;
 entity memory_control_top is
 port
 (
-  -- CDL=> Change to I_CLK_50MHZ
-  I_CLK          : in std_logic;                      -- System clk frequency of (C_CLK_FREQ_MHZ)
+  I_CLK_50_MHZ   : in std_logic;                      -- System clk (50 MHZ)
   I_RESET_N      : in std_logic;                      -- System reset (active low)
   I_KEYPAD_ROWS  : in std_logic_vector(4 downto 0);   -- Keypad Inputs (rows)
   O_KEYPAD_COLS  : out std_logic_vector(3 downto 0);  -- Keypad Outputs (cols)
@@ -45,7 +44,8 @@ port
   O_HEX2_N       : out std_logic_vector(6 downto 0);  -- Segment data for seven segment display 2
   O_HEX3_N       : out std_logic_vector(6 downto 0);  -- Segment data for seven segment display 3
   O_HEX4_N       : out std_logic_vector(6 downto 0);  -- Segment data for seven segment display 4
-  O_HEX5_N       : out std_logic_vector(6 downto 0)   -- Segment data for seven segment display 5
+  O_HEX5_N       : out std_logic_vector(6 downto 0);  -- Segment data for seven segment display 5
+  O_MODE_LED     : out std_logic                      -- LED to display current mode: On (OP) else Off
 );
 end entity memory_control_top;
 
@@ -169,7 +169,7 @@ begin
   )
   port map
   (
-    I_CLK            => I_CLK,
+    I_CLK            => I_CLK_50_MHZ,
     I_RESET_N        => I_RESET_N,
     I_DISPLAY_ENABLE => s_display_enable,
     I_DATA_BITS      => s_display_data_bits,
@@ -190,7 +190,7 @@ begin
   )
   port map
   (
-    I_CLK            => I_CLK,
+    I_CLK            => I_CLK_50_MHZ,
     I_RESET_N        => I_RESET_N,
     I_KEYPAD_ROWS    => I_KEYPAD_ROWS,
     O_KEYPAD_COLS    => O_KEYPAD_COLS,
@@ -203,7 +203,7 @@ begin
   port map
   (
     address          => s_addr_bits,
-	  clock            => I_CLK,
+	  clock            => I_CLK_50_MHZ,
 	  q                => s_rom_data_bits
   );
 
@@ -213,26 +213,26 @@ begin
 
   ------------------------------------------------------------------------------
   -- Process Name     : ADDRESS_TOGGLE_COUNTER
-  -- Sensitivity List : I_CLK            : System clock
+  -- Sensitivity List : I_CLK_50_MHZ     : System clock
   --                    I_RESET_N        : System reset (active low logic)
   -- Useful Outputs   : s_address_toggle : Pulsed signal to toggle address
   -- Description      : Counter to delay changing address at a rate of either
   --                    255Hz (INIT_STATE) or 1Hz (OP_STATE).
   ------------------------------------------------------------------------------
-  ADDRESS_TOGGLE_COUNTER: process (I_CLK, I_RESET_N)
+  ADDRESS_TOGGLE_COUNTER: process (I_CLK_50_MHZ, I_RESET_N)
     constant C_1HZ_MAX_COUNT       : integer := C_CLK_FREQ_MHZ * 1000000;
     constant C_255HZ_MAX_COUNT     : integer := C_CLK_FREQ_MHZ * 4000;
     variable v_address_toggle_cntr : integer range 0 TO C_1HZ_MAX_COUNT := 0;
   begin
     if (I_RESET_N = '0') then
-      v_address_toggle_cntr     <=  0;
+      v_address_toggle_cntr     :=  0;
       s_address_toggle          <= '0';
 
-    elsif (rising_edge(I_CLK)) then
+    elsif (rising_edge(I_CLK_50_MHZ)) then
 
       -- Only count if enabled
       if (s_address_cntr_enabled = '0') then
-        v_address_toggle_cntr   <=  0;
+        v_address_toggle_cntr   :=  0;
         s_address_toggle        <= '0';
 
       else
@@ -247,9 +247,9 @@ begin
         -- Counter and rollover logic
         if (s_current_mode = INIT_STATE and v_address_toggle_cntr = C_255HZ_MAX_COUNT) or
            (s_current_mode = OP_STATE and v_address_toggle_cntr = C_1HZ_MAX_COUNT) then
-          v_address_toggle_cntr <= 0;
+          v_address_toggle_cntr := 0;
         else
-          v_address_toggle_cntr <= v_address_toggle_cntr + 1;
+          v_address_toggle_cntr := v_address_toggle_cntr + 1;
         end if;
       end if;
     end if;
@@ -258,21 +258,21 @@ begin
 
   ------------------------------------------------------------------------------
   -- Process Name     : ADDRESS_INDEX_COUNTER
-  -- Sensitivity List : I_CLK             : System clock
+  -- Sensitivity List : I_CLK_50_MHZ      : System clock
   --                    I_RESET_N         : System reset (active low logic)
   -- Useful Outputs   : s_current_address : Current address of counter
   -- Description      : A process to adjust address depending on mode.
   ------------------------------------------------------------------------------
-  ADDRESS_INDEX_COUNTER: process (I_CLK, I_RESET_N)
+  ADDRESS_INDEX_COUNTER: process (I_CLK_50_MHZ, I_RESET_N)
   begin
     if (I_RESET_N = '0') then
       s_current_address     <= (others=>'0');
 
-    elsif (rising_edge(I_CLK)) then
+    elsif (rising_edge(I_CLK_50_MHZ)) then
 
       -- Reset address to zero when exiting programming state
       if (s_current_mode = OP_STATE) and
-         (s_previous_mode = PROG_STATE)
+         (s_previous_mode = PROG_STATE) then
         s_current_address   <= (others=>'0');
 
       -- Increment address when toggle signal occurs and direction is forward
@@ -282,7 +282,7 @@ begin
 
       -- Decrement address when toggle signal occurs and direction is reverse
       elsif (s_address_toggle = '1') and
-            (s_address_cntr_forward = '1') then
+            (s_address_cntr_forward = '0') then
           s_current_address <= s_current_address - 1;
 
       else
@@ -294,7 +294,7 @@ begin
 
   ------------------------------------------------------------------------------
   -- Process Name     : ADDRESS_COUNTER_CONTROL
-  -- Sensitivity List : I_CLK                  : System clock
+  -- Sensitivity List : I_CLK_50_MHZ           : System clock
   --                    I_RESET_N              : System reset (active low logic)
   -- Useful Outputs   : s_address_cntr_enabled : Whether the address counter
   --                                             is enabled
@@ -303,23 +303,22 @@ begin
   -- Description      : A process to control address counter enable and
   --                    direction signals
   ------------------------------------------------------------------------------
-  ADDRESS_COUNTER_CONTROL: process (I_CLK, I_RESET_N)
+  ADDRESS_COUNTER_CONTROL: process (I_CLK_50_MHZ, I_RESET_N)
   begin
     if (I_RESET_N = '0') then
       s_address_cntr_enabled   <= '1';
       s_address_cntr_forward   <= '1';
 
-    elsif (rising_edge(I_CLK)) then
+    elsif (rising_edge(I_CLK_50_MHZ)) then
       -- Reset address to zero when exiting programming state
       if (s_current_mode = OP_STATE) and
-         (s_previous_mode = PROG_STATE)
+         (s_previous_mode = PROG_STATE) then
         s_address_cntr_enabled <= '0';
 
       -- Enable (turn on) the address counter if H key pressed in OP mode
       elsif (s_current_mode = OP_STATE) and
          (s_keypressed = '1' and s_keypad_data = "10001") then -- H key pressed
         s_address_cntr_enabled <= not s_address_cntr_enabled;
-
       else
         s_address_cntr_enabled <= s_address_cntr_enabled;
       end if;
@@ -338,25 +337,26 @@ begin
 
   ------------------------------------------------------------------------------
   -- Process Name     : MODE_STATE_MACHINE
-  -- Sensitivity List : I_CLK           : System clock
+  -- Sensitivity List : I_CLK_50_MHZ    : System clock
   --                    I_RESET_N       : System reset (active low logic)
   -- Useful Outputs   : s_current_mode  : Current mode of the system
   --                    s_previous_mode : Mode of system last clock edge
   -- Description      : State machine to control different modes for
   --                    initialization, programming, and operation of system.
   ------------------------------------------------------------------------------
-  MODE_STATE_MACHINE: process (I_CLK, I_RESET_N)
+  MODE_STATE_MACHINE: process (I_CLK_50_MHZ, I_RESET_N)
   begin
     if (I_RESET_N = '0') then
       s_current_mode     <= INIT_STATE;
       s_previous_mode    <= INIT_STATE;
 
-    elsif (rising_edge(I_CLK)) then
+    elsif (rising_edge(I_CLK_50_MHZ)) then
 
       -- Initialization mode
       if (s_current_mode = INIT_STATE) then
         -- Wait for ROM data to be loaded into SRAM
-        if (s_current_address = C_MAX_ADDRESS) then
+        if (s_current_address = C_MAX_ADDRESS) and
+           (s_address_toggle = '1') then
           s_current_mode <= OP_STATE;
         else
           s_current_mode <= s_current_mode;
@@ -394,20 +394,20 @@ begin
 
   ------------------------------------------------------------------------------
   -- Process Name     : INPUT_SHIFT_REGISTER
-  -- Sensitivity List : I_CLK            : System clock
+  -- Sensitivity List : I_CLK_50_MHZ     : System clock
   --                    I_RESET_N        : System reset (active low logic)
   -- Useful Outputs   : s_data_shift_reg : Shift register for inputted data
   --                    s_addr_shift_reg : Shift register for inputted address
   -- Description      : A process to control inputted data from the keypad.
   ------------------------------------------------------------------------------
-  INPUT_SHIFT_REGISTER: process (I_CLK, I_RESET_N)
+  INPUT_SHIFT_REGISTER: process (I_CLK_50_MHZ, I_RESET_N)
   begin
     if (I_RESET_N = '0') then
       s_addr_data_mode                    <= '0';
 		  s_data_shift_reg                    <= (others=>'0');
 		  s_addr_shift_reg                    <= (others=>'0');
 
-    elsif (rising_edge(I_CLK)) then
+    elsif (rising_edge(I_CLK_50_MHZ)) then
       if (s_current_mode = PROG_STATE) then
         -- Toggle selected register
         if (s_keypressed = '1' and s_keypad_data = "10001") then -- H key pressed
@@ -440,7 +440,7 @@ begin
 
   ------------------------------------------------------------------------------
   -- Process Name     : DATA_FLOW_CONTROL
-  -- Sensitivity List : I_CLK               : System clock
+  -- Sensitivity List : I_CLK_50_MHZ        : System clock
   --                    I_RESET_N           : System reset (active low logic)
   -- Useful Outputs   : s_display_enable    : Digit enable for display
   --                    s_addr_bits         : Global address
@@ -449,7 +449,7 @@ begin
   -- Description      : A process to control the flow of data goes depending
   --                    on mode.
   ------------------------------------------------------------------------------
-  DATA_FLOW_CONTROL: process (I_CLK, I_RESET_N)
+  DATA_FLOW_CONTROL: process (I_CLK_50_MHZ, I_RESET_N)
   begin
     if (I_RESET_N = '0') then
       s_display_enable      <= '0';
@@ -457,7 +457,7 @@ begin
       s_display_data_bits   <= (others=>'0');
       s_data_buffer         <= (others=>(others=>('0')));
 
-    elsif (rising_edge(I_CLK)) then
+    elsif (rising_edge(I_CLK_50_MHZ)) then
       -- Enable (turn on) the display depending on mode
       if (s_current_mode = INIT_STATE) then
         s_display_enable    <= '0';
@@ -490,5 +490,10 @@ begin
     end if;
   end process DATA_FLOW_CONTROL;
   ------------------------------------------------------------------------------
+
+  -- Selection for mode LED
+  with s_current_mode select
+    O_MODE_LED <= '1' when OP_STATE,
+                  '0' when others;
 
 end architecture behavioral;
