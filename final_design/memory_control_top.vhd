@@ -141,7 +141,7 @@ architecture behavioral of memory_control_top is
 
   signal s_keypad_data    : std_logic_vector(4 downto 0);   -- Data from keypress
   signal s_keypressed     : std_logic;                      -- Whether a key was pressed
-  signal s_data_shift_reg : unsigned(15 downto 0);  -- Data to display
+  signal s_data_shift_reg : std_logic_vector(15 downto 0);  -- Data to display
   signal s_addr_shift_reg : unsigned(7 downto 0);   -- Address to display
   signal s_addr_data_mode : std_logic;                      -- Signal to hold current entry mode (address = 1, data = 0)
 
@@ -296,6 +296,10 @@ begin
       else
         s_current_address <= s_current_address;
       end if;
+      if (s_current_mode = PROG_STATE) and
+         (s_keypressed = '1' and s_keypad_data = "10000") then -- Shift key pressed
+        s_current_address  <= (others=>'0');
+      end if;
     end if;
   end process ADDRESS_INCREMENT;
   ------------------------------------------------------------------------------
@@ -321,11 +325,11 @@ begin
         s_display_enable <= '1';
       end if;
 
-      if (s_current_mode = OP_STATE) then
+      if (s_current_mode = OP_STATE or s_current_mode = INIT_STATE) then
         s_addr_bits <= std_logic_vector(s_current_address);
         s_display_data_bits <= s_data_buffer(to_integer(s_current_address));
       else
-        s_addr_bits <= s_addr_shift_reg;
+        s_addr_bits <= std_logic_vector(s_addr_shift_reg);
         s_display_data_bits <= s_data_shift_reg;
       end if;
 
@@ -334,7 +338,8 @@ begin
         s_data_buffer(to_integer(s_current_address)) <= s_rom_data_bits;
       elsif (s_current_mode = PROG_STATE) and
             (s_keypressed = '1' and s_keypad_data = "10010") then -- L key pressed
-        s_data_buffer(to_integer(s_addr_shift_reg)) <= s_data_shift_reg;
+        s_data_buffer <= s_data_buffer;
+		  s_data_buffer(to_integer(s_addr_shift_reg)) <= s_data_shift_reg;
       else
         s_data_buffer <= s_data_buffer;
       end if;
@@ -406,7 +411,7 @@ begin
         if (s_keypressed = '1' and s_keypad_data(4) /= '1') then -- Data (0-F) key pressed
           if (s_addr_data_mode = '0') then -- Address mode
             s_addr_shift_reg(7 downto 4)  <= s_addr_shift_reg(3 downto 0);
-            s_addr_shift_reg(3 downto 0)  <= s_keypad_data(3 downto 0);
+            s_addr_shift_reg(3 downto 0)  <= unsigned(s_keypad_data(3 downto 0));
           else                             -- Data mode
             s_data_shift_reg(15 downto 4) <= s_data_shift_reg(11 downto 0);
             s_data_shift_reg(3 downto 0)  <= s_keypad_data(3 downto 0);
