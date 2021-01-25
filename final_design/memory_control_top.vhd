@@ -540,10 +540,10 @@ begin
 
       -- Control address and data routing
       if (s_current_mode = OP_STATE or s_current_mode = INIT_STATE) then
-        s_addr_bits         <= std_logic_vector(s_current_address);
+        s_addr_bits(7 downto 0)         <= std_logic_vector(s_current_address);
         s_display_data_bits <= s_sram_read_data;
       else
-        s_addr_bits         <= std_logic_vector(s_addr_shift_reg);
+        s_addr_bits(7 downto 0) <= std_logic_vector(s_addr_shift_reg);
         s_display_data_bits <= s_data_shift_reg;
       end if;
 
