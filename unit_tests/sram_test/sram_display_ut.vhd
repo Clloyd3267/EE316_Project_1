@@ -21,7 +21,7 @@ use ieee.Numeric_std.all;
 entity sram_display_ut is
 port
 (
-  I_CLK          : in std_logic;                      -- System clk frequency of (C_CLK_FREQ_MHZ)
+  I_CLK_50_MHZ   : in std_logic;                      -- System clk frequency of (C_CLK_FREQ_MHZ)
   I_RESET_N      : in std_logic;                      -- System reset (active low)
   O_HEX0_N       : out std_logic_vector(6 downto 0);  -- Segment data for seven segment display 0
   O_HEX1_N       : out std_logic_vector(6 downto 0);  -- Segment data for seven segment display 1
@@ -131,11 +131,11 @@ begin
   )
   port map
   (
-    I_CLK            => I_CLK,
+    I_CLK            => I_CLK_50_MHZ,
     I_RESET_N        => I_RESET_N,
     I_DISPLAY_ENABLE => s_display_enable,
     I_DATA_BITS      => s_sram_read_data,
-    I_ADDR_BITS      => s_current_address(7 downto 0),
+    I_ADDR_BITS      => std_logic_vector(s_current_address(7 downto 0)),
     O_HEX0_N         => O_HEX0_N,
     O_HEX1_N         => O_HEX1_N,
     O_HEX2_N         => O_HEX2_N,
@@ -145,19 +145,19 @@ begin
   );
 
   SRAM_CONTROLLER: sram_driver
-  generic
+  generic map
   (
     C_CLK_FREQ_MHZ => C_CLK_FREQ_MHZ
   )
-  port
+  port map
   (
-    I_CLK             => I_CLK,
+    I_CLK             => I_CLK_50_MHZ,
     I_RESET_N         => I_RESET_N,
     I_SRAM_ENABLE     => s_sram_enable,
     I_COMMAND_TRIGGER => s_sram_trigger,
     I_RW              => s_sram_rw,
-    I_ADDRESS         => s_current_address,
-    I_DATA            => s_current_address(15 downto 0),
+    I_ADDRESS         => std_logic_vector(s_current_address),
+    I_DATA            => std_logic_vector(s_current_address(15 downto 0)),
     O_BUSY            => s_sram_busy,
     O_DATA            => s_sram_read_data,
     IO_SRAM_DATA      => IO_SRAM_DATA,
@@ -175,12 +175,12 @@ begin
 
   ------------------------------------------------------------------------------
   -- Process Name     : ADDRESS_TOGGLE_COUNTER
-  -- Sensitivity List : I_CLK            : System clock
+  -- Sensitivity List : I_CLK_50_MHZ     : System clock
   --                    I_RESET_N        : System reset (active low logic)
   -- Useful Outputs   : s_address_toggle : Pulsed signal to increment address
   -- Description      : Counter to delay changing address every 1 second
   ------------------------------------------------------------------------------
-  ADDRESS_TOGGLE_COUNTER: process (I_CLK, I_RESET_N)
+  ADDRESS_TOGGLE_COUNTER: process (I_CLK_50_MHZ, I_RESET_N)
     variable v_address_toggle_max_count : integer := C_CLK_FREQ_MHZ * 1000000;  -- 1HZ
     variable v_address_toggle_cntr      : integer range 0 TO v_address_toggle_max_count := 0;
   begin
@@ -188,7 +188,7 @@ begin
       v_address_toggle_cntr   :=  0;
       s_address_toggle        <= '0';
 
-    elsif (rising_edge(I_CLK)) then
+    elsif (rising_edge(I_CLK_50_MHZ)) then
       -- Address index output logic
       if (v_address_toggle_cntr = v_address_toggle_max_count) then
         s_address_toggle      <= '1';
@@ -208,24 +208,24 @@ begin
 
   ------------------------------------------------------------------------------
   -- Process Name     : SRAM_DISPLAY_TEST
-  -- Sensitivity List : I_CLK            : System clock
+  -- Sensitivity List : I_CLK_50_MHZ     : System clock
   --                    I_RESET_N        : System reset (active low logic)
   -- Useful Outputs   :
   --                    s_display_enable : Digit enable for display
   -- Description      : A process to pass data from preloaded ROM to a display
   --                    controller.
   ------------------------------------------------------------------------------
-  SRAM_DISPLAY_TEST: process (I_CLK, I_RESET_N)
-    variable v_max_address     : unsigned(17 downto 0) := to_unsigned(16, 18);
+  SRAM_DISPLAY_TEST: process (I_CLK_50_MHZ, I_RESET_N)
+    variable v_max_address : unsigned(17 downto 0) := to_unsigned(15, 18);
   begin
     if (I_RESET_N = '0') then
-      s_display_enable  <= '0';
+    --  s_display_enable  <= '0';
       s_sram_enable     <= '0';
-      s_current_address <= (others=>'0');
+      s_current_address <= (others=>'1');
       s_sram_trigger    <= '0';
       s_sram_rw         <= '0';
 
-    elsif (rising_edge(I_CLK)) then
+    elsif (rising_edge(I_CLK_50_MHZ)) then
       -- Enable (turn on) the display
       s_display_enable <= '1';
 
