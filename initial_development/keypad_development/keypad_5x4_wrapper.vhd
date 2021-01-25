@@ -178,7 +178,8 @@ begin
       s_keypad_enable <= '1';
 
       -- Check if a button is pressed
-		if (to_integer(unsigned(s_keypad_binary)) = 0) then
+    if (to_integer(unsigned(s_keypad_binary)) = 0) or
+       (s_keypad_binary(19) = '1') then
 		  O_KEYPRESSED <= '0';
 		else
 		  O_KEYPRESSED <= '1';
