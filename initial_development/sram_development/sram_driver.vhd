@@ -109,7 +109,7 @@ begin
 
           when IDLE_STATE =>
             if (I_COMMAND_TRIGGER = '1')
-              if (I_RW = '1')
+              if (I_RW = '1')  -- Read
                 s_sram_current_state <= READ_1_STATE;
               else
                 s_sram_current_state <= WRITE_1_STATE;

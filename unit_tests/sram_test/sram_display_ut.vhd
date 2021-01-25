@@ -70,21 +70,34 @@ architecture behavioral of sram_display_ut is
   );
   end component de2_display_driver;
 
-  component sram_ctrl is
-    port(
-      clk, reset_n: in std_logic;
-      mem: in std_logic;
-      rw: in std_logic;
-      addr: in std_logic_vector(17 downto 0);
-      data_f2s: in std_logic_vector(15 downto 0);
-      ready: out std_logic;
-      data_s2f_r, data_s2f_ur: out std_logic_vector(15 downto 0);
+  component sram_driver is
+  generic
+  (
+    C_CLK_FREQ_MHZ    : integer       -- System clock frequency in MHz
+  );
+  port
+  (
+    I_CLK             : in std_logic; -- System clk frequency of (C_CLK_FREQ_MHZ)
+    I_RESET_N         : in std_logic; -- System reset (active low)
 
-      ad: out std_logic_vector(17 downto 0);
-      ub_n, lb_n, we_n, oe_n: out std_logic;
-      dio: inout std_logic_vector(7 downto 0);
-      ce_n: out std_logic);
-  end component sram_ctrl;
+    I_SRAM_ENABLE     : in std_logic;
+    I_COMMAND_TRIGGER : in std_logic;
+    I_RW              : in std_logic;
+    I_ADDRESS         : in std_logic_vector(17 downto 0);
+    I_DATA            : in std_logic_vector(15 downto 0);
+    O_BUSY            : out std_logic;
+    O_DATA            : out std_logic_vector(15 downto 0);
+
+    -- Low level pass through signals
+    IO_SRAM_DATA      : inout std_logic_vector(15 downto 0);
+    O_SRAM_ADDR       : out std_logic_vector(17 downto 0);
+    O_SRAM_WE_N       : out std_logic;
+    O_SRAM_OE_N       : out std_logic;
+    O_SRAM_UB_N       : out std_logic;
+    O_SRAM_LB_N       : out std_logic;
+    O_SRAM_CE_N       : out std_logic
+  );
+  end component sram_driver;
 
   ---------------
   -- Constants --
@@ -97,19 +110,16 @@ architecture behavioral of sram_display_ut is
   -------------
 
   signal s_address_toggle : std_logic;                      -- Address toggle signal
-  signal s_display_enable : std_logic;                      -- Display's enable control
-  signal s_data_bits      : std_logic_vector(15 downto 0);  -- Data to display
-  signal s_addr_bits      : std_logic_vector(17 downto 0);   -- Address to display
-  signal s_write_mode     : std_logic;
-  signal s_trigger        : std_logic;
 
-  signal s_mem: std_logic;
-  signal s_rw: std_logic;
-  signal s_addr: std_logic_vector(17 downto 0);
-  signal s_data_f2s: std_logic_vector(15 downto 0);
-  signal s_ready: std_logic;
-  signal s_data_s2f_r, s_data_s2f_ur: std_logic_vector(15 downto 0);
-  signal s_current_address : unsigned(7 downto 0) := (others=>'0');
+  signal s_display_enable : std_logic;                      -- Display's enable control
+
+  signal s_current_address : unsigned(17 downto 0);
+
+  signal s_sram_enable      : std_logic;
+  signal s_sram_trigger     : std_logic;
+  signal s_sram_rw          : std_logic;
+  signal s_sram_busy        : std_logic;
+  signal s_sram_read_data   : std_logic_vector(15 downto 0);
 
 begin
 
@@ -124,8 +134,8 @@ begin
     I_CLK            => I_CLK,
     I_RESET_N        => I_RESET_N,
     I_DISPLAY_ENABLE => s_display_enable,
-    I_DATA_BITS      => s_data_bits,
-    I_ADDR_BITS      => s_addr_bits(7 downto 0),
+    I_DATA_BITS      => s_sram_read_data,
+    I_ADDR_BITS      => s_current_address(7 downto 0),
     O_HEX0_N         => O_HEX0_N,
     O_HEX1_N         => O_HEX1_N,
     O_HEX2_N         => O_HEX2_N,
@@ -134,25 +144,29 @@ begin
     O_HEX5_N         => O_HEX5_N
   );
 
-  -- CDL=> Add SRAM port map here
-  SRAM_CONTROLLER: sram_ctrl
-  port map(
-    clk => I_CLK,
-    reset_n => I_RESET_N,
-    mem => s_mem,
-    rw => s_rw,
-    addr => s_addr_bits,
-    data_f2s => s_data_f2s,
-    ready => s_ready,
-    data_s2f_r => s_data_s2f_r,
-    data_s2f_ur => s_data_s2f_ur,
-    ad => O_SRAM_ADDR,
-    ub_n => O_SRAM_UB_N,
-    lb_n => O_SRAM_LB_N,
-    we_n => O_SRAM_WE_N
-    oe_n => O_SRAM_OE_N,
-    dio => IO_SRAM_DATA,
-    ce_n => O_SRAM_CE_N
+  SRAM_CONTROLLER: sram_driver
+  generic
+  (
+    C_CLK_FREQ_MHZ => C_CLK_FREQ_MHZ
+  )
+  port
+  (
+    I_CLK             => I_CLK,
+    I_RESET_N         => I_RESET_N,
+    I_SRAM_ENABLE     => s_sram_enable,
+    I_COMMAND_TRIGGER => s_sram_trigger,
+    I_RW              => s_sram_rw,
+    I_ADDRESS         => s_current_address,
+    I_DATA            => s_current_address(15 downto 0),
+    O_BUSY            => s_sram_busy,
+    O_DATA            => s_sram_read_data,
+    IO_SRAM_DATA      => IO_SRAM_DATA,
+    O_SRAM_ADDR       => O_SRAM_ADDR,
+    O_SRAM_WE_N       => O_SRAM_WE_N,
+    O_SRAM_OE_N       => O_SRAM_OE_N,
+    O_SRAM_UB_N       => O_SRAM_UB_N,
+    O_SRAM_LB_N       => O_SRAM_LB_N,
+    O_SRAM_CE_N       => O_SRAM_CE_N
   );
 
   ---------------
@@ -202,17 +216,21 @@ begin
   --                    controller.
   ------------------------------------------------------------------------------
   SRAM_DISPLAY_TEST: process (I_CLK, I_RESET_N)
-    variable v_max_address     : unsigned(7 downto 0) := to_unsigned(16, 8);
+    variable v_max_address     : unsigned(17 downto 0) := to_unsigned(16, 18);
   begin
     if (I_RESET_N = '0') then
+      s_display_enable  <= '0';
+      s_sram_enable     <= '0';
       s_current_address <= (others=>'0');
-      s_addr_bits <= (others=> '0');
-      s_rw                  <= '0';
-      s_trigger <= '0';
+      s_sram_trigger    <= '0';
+      s_sram_rw         <= '0';
 
     elsif (rising_edge(I_CLK)) then
       -- Enable (turn on) the display
-      s_display_enable      <= '1';
+      s_display_enable <= '1';
+
+      -- Enable (turn on) the sram
+      s_sram_enable    <= '1';
 
       -- Increment address
       if (s_address_toggle = '1') then
@@ -227,23 +245,21 @@ begin
 
       -- Trigger SRAM
       if (s_address_toggle = '1') then
-        s_trigger <= '1';
+        s_sram_trigger <= '1';
       else
-        s_trigger <= '0';
+        s_sram_trigger <= '0';
       end if;
 
-      if (s_current_address = v_max_address) then
-        s_rw <= '1';
+      -- Write until max address is reached first time, then read
+      if (s_address_toggle = '1') then
+        if (s_current_address = v_max_address) then
+          s_sram_rw <= '1';
+        else
+          s_sram_rw <= s_sram_rw;
+        end if;
       else
-        s_rw <= s_rw;
+        s_sram_rw <= s_sram_rw;
       end if;
-
-      s_mem <= s_trigger;
-      s_addr_bits <= (others=>'0');
-      s_addr_bits(7 downto 0) <= std_logic_vector(s_current_address);
-      s_data_f2s <= (others=>'0');
-      s_data_f2s(7 downto 0) <= std_logic_vector(s_current_address);
-      s_data_bits <= s_data_s2f_r;
     end if;
   end process SRAM_DISPLAY_TEST;
   ------------------------------------------------------------------------------
