@@ -45,7 +45,14 @@ port
   O_HEX3_N       : out std_logic_vector(6 downto 0);  -- Segment data for seven segment display 3
   O_HEX4_N       : out std_logic_vector(6 downto 0);  -- Segment data for seven segment display 4
   O_HEX5_N       : out std_logic_vector(6 downto 0);  -- Segment data for seven segment display 5
-  O_MODE_LED     : out std_logic                      -- LED to display current mode: On (OP) else Off
+  O_MODE_LED     : out std_logic;                     -- LED to display current mode: On (OP) else Off
+  IO_SRAM_DATA   : inout std_logic_vector(15 downto 0);
+  O_SRAM_ADDR    : out std_logic_vector(17 downto 0);
+  O_SRAM_WE_N    : out std_logic;
+  O_SRAM_OE_N    : out std_logic;
+  O_SRAM_UB_N    : out std_logic;
+  O_SRAM_LB_N    : out std_logic;
+  O_SRAM_CE_N    : out std_logic
 );
 end entity memory_control_top;
 
@@ -99,6 +106,35 @@ architecture behavioral of memory_control_top is
   );
   end component keypad_5x4_wrapper;
 
+  component sram_driver is
+  generic
+  (
+    C_CLK_FREQ_MHZ    : integer       -- System clock frequency in MHz
+  );
+  port
+  (
+    I_CLK             : in std_logic; -- System clk frequency of (C_CLK_FREQ_MHZ)
+    I_RESET_N         : in std_logic; -- System reset (active low)
+
+    I_SRAM_ENABLE     : in std_logic;
+    I_COMMAND_TRIGGER : in std_logic;
+    I_RW              : in std_logic;
+    I_ADDRESS         : in std_logic_vector(17 downto 0);
+    I_DATA            : in std_logic_vector(15 downto 0);
+    O_BUSY            : out std_logic;
+    O_DATA            : out std_logic_vector(15 downto 0);
+
+    -- Low level pass through signals
+    IO_SRAM_DATA      : inout std_logic_vector(15 downto 0);
+    O_SRAM_ADDR       : out std_logic_vector(17 downto 0);
+    O_SRAM_WE_N       : out std_logic;
+    O_SRAM_OE_N       : out std_logic;
+    O_SRAM_UB_N       : out std_logic;
+    O_SRAM_LB_N       : out std_logic;
+    O_SRAM_CE_N       : out std_logic
+  );
+  end component sram_driver;
+
   component rom_driver is
   port
   (
@@ -145,7 +181,7 @@ architecture behavioral of memory_control_top is
   -- Display enable
   signal s_display_enable       : std_logic := '0';
   -- Global address for ROM, Display, and SRAM
-  signal s_addr_bits            : std_logic_vector(7 downto 0)  := (others=>'0');
+  signal s_addr_bits            : std_logic_vector(17 downto 0) := (others=>'0');
   -- Data going to display
   signal s_display_data_bits    : std_logic_vector(15 downto 0) := (others=>'0');
   -- Data buffer as a temporary replacement for SRAM
@@ -158,6 +194,14 @@ architecture behavioral of memory_control_top is
   signal s_keypad_data          : std_logic_vector(4 downto 0);
   -- Whether a key was pressed
   signal s_keypressed           : std_logic;
+
+  -- CDL=> SRAM Signals
+  signal s_sram_enable      : std_logic;
+  signal s_sram_trigger     : std_logic;
+  signal s_sram_rw          : std_logic;
+  signal s_sram_busy        : std_logic;
+  signal s_sram_read_data   : std_logic_vector(15 downto 0);
+  signal s_sram_write_data   : std_logic_vector(15 downto 0);
 
 begin
 
@@ -173,7 +217,7 @@ begin
     I_RESET_N        => I_RESET_N,
     I_DISPLAY_ENABLE => s_display_enable,
     I_DATA_BITS      => s_display_data_bits,
-    I_ADDR_BITS      => s_addr_bits,
+    I_ADDR_BITS      => s_addr_bits(7 downto 0),
     O_HEX0_N         => O_HEX0_N,
     O_HEX1_N         => O_HEX1_N,
     O_HEX2_N         => O_HEX2_N,
@@ -198,13 +242,39 @@ begin
     O_KEYPRESSED     => s_keypressed
   );
 
+  -- SRAM controller to store and recall data from SRAM
+  SRAM_CONTROLLER: sram_driver
+  generic map
+  (
+    C_CLK_FREQ_MHZ => C_CLK_FREQ_MHZ
+  )
+  port map  -- CDL=> SRAM Port Map
+  (
+    I_CLK             => I_CLK_50_MHZ,
+    I_RESET_N         => I_RESET_N,
+    I_SRAM_ENABLE     => s_sram_enable,
+    I_COMMAND_TRIGGER => s_sram_trigger,
+    I_RW              => s_sram_rw,
+    I_ADDRESS         => s_addr_bits,
+    I_DATA            => s_sram_write_data,
+    O_BUSY            => s_sram_busy,
+    O_DATA            => s_sram_read_data,
+    IO_SRAM_DATA      => IO_SRAM_DATA,
+    O_SRAM_ADDR       => O_SRAM_ADDR,
+    O_SRAM_WE_N       => O_SRAM_WE_N,
+    O_SRAM_OE_N       => O_SRAM_OE_N,
+    O_SRAM_UB_N       => O_SRAM_UB_N,
+    O_SRAM_LB_N       => O_SRAM_LB_N,
+    O_SRAM_CE_N       => O_SRAM_CE_N
+  );
+
   -- Rom controller to get data from read only memory
   ROM_CONTROLLER: rom_driver
   port map
   (
-    address          => s_addr_bits,
-	  clock            => I_CLK_50_MHZ,
-	  q                => s_rom_data_bits
+    address          => s_addr_bits(7 downto 0),
+    clock            => I_CLK_50_MHZ,
+    q                => s_rom_data_bits
   );
 
   ---------------
@@ -404,8 +474,8 @@ begin
   begin
     if (I_RESET_N = '0') then
       s_addr_data_mode                    <= '0';
-		  s_data_shift_reg                    <= (others=>'0');
-		  s_addr_shift_reg                    <= (others=>'0');
+      s_data_shift_reg                    <= (others=>'0');
+      s_addr_shift_reg                    <= (others=>'0');
 
     elsif (rising_edge(I_CLK_50_MHZ)) then
       if (s_current_mode = PROG_STATE) then
@@ -453,9 +523,9 @@ begin
   begin
     if (I_RESET_N = '0') then
       s_display_enable      <= '0';
+      s_sram_enable         <= '0';
       s_addr_bits           <= (others=>'0');
       s_display_data_bits   <= (others=>'0');
-      s_data_buffer         <= (others=>(others=>('0')));
 
     elsif (rising_edge(I_CLK_50_MHZ)) then
       -- Enable (turn on) the display depending on mode
@@ -465,27 +535,56 @@ begin
         s_display_enable    <= '1';
       end if;
 
+      -- Enable (turn on) the sram
+      s_sram_enable    <= '1';
+
       -- Control address and data routing
       if (s_current_mode = OP_STATE or s_current_mode = INIT_STATE) then
         s_addr_bits         <= std_logic_vector(s_current_address);
-        s_display_data_bits <= s_data_buffer(to_integer(s_current_address));
+        s_display_data_bits <= s_sram_read_data;
       else
         s_addr_bits         <= std_logic_vector(s_addr_shift_reg);
         s_display_data_bits <= s_data_shift_reg;
       end if;
 
-      -- Get SRAM data from ROM when in init mode
-      if (s_current_mode = INIT_STATE) then
-        s_data_buffer(to_integer(s_current_address)) <= s_rom_data_bits;
+      -- Control SRAM write data
+      if (s_current_mode = INIT_STATE) and
+         (s_address_toggle = '1') then
+        s_sram_write_data <= s_rom_data_bits;
 
-      -- Get SRAM data from shift registers when in programming mode and
+      -- Get SRAM writedata from shift registers when in programming mode and
       -- load key (L) is pressed
       elsif (s_current_mode = PROG_STATE) and
             (s_keypressed = '1' and s_keypad_data = "10010") then -- L key pressed
-        s_data_buffer       <= s_data_buffer;
-		    s_data_buffer(to_integer(s_addr_shift_reg)) <= s_data_shift_reg;
+        s_sram_write_data <= s_data_shift_reg;
       else
-        s_data_buffer       <= s_data_buffer;
+        s_sram_write_data <= s_sram_write_data;
+      end if;
+
+      -- Control SRAM read/write signal
+      if (s_current_mode = INIT_STATE) then
+        s_sram_rw <= '0';
+      elsif (s_current_mode = PROG_STATE) then
+        s_sram_rw <= '0';
+      else
+        s_sram_rw <= '1';
+      end if;
+
+      -- Control SRAM command trigger
+      if (s_current_mode = INIT_STATE) and
+         (s_address_toggle = '1') then
+        s_sram_trigger <= '1';
+
+      -- Trigger SRAM writedata from shift registers when in programming mode and
+      -- load key (L) is pressed
+      elsif (s_current_mode = PROG_STATE) and
+            (s_keypressed = '1' and s_keypad_data = "10010") then -- L key pressed
+        s_sram_trigger <= '1';
+      elsif (s_current_mode = OP_STATE) and
+            (s_address_toggle = '1') then
+        s_sram_trigger <= '1';
+      else
+        s_sram_trigger <= '0';
       end if;
     end if;
   end process DATA_FLOW_CONTROL;
