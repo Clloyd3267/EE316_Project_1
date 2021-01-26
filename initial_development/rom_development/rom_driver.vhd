@@ -4,7 +4,7 @@
 -- MODULE: altsyncram 
 
 -- ============================================================
--- File Name: rom_controller.vhd
+-- File Name: rom_driver.vhd
 -- Megafunction Name(s):
 -- 			altsyncram
 --
@@ -39,17 +39,17 @@ USE ieee.std_logic_1164.all;
 LIBRARY altera_mf;
 USE altera_mf.all;
 
-ENTITY rom_controller IS
+ENTITY rom_driver IS
 	PORT
 	(
 		address		: IN STD_LOGIC_VECTOR (7 DOWNTO 0);
 		clock		: IN STD_LOGIC  := '1';
 		q		: OUT STD_LOGIC_VECTOR (15 DOWNTO 0)
 	);
-END rom_controller;
+END rom_driver;
 
 
-ARCHITECTURE SYN OF rom_controller IS
+ARCHITECTURE SYN OF rom_driver IS
 
 	SIGNAL sub_wire0	: STD_LOGIC_VECTOR (15 DOWNTO 0);
 
@@ -158,9 +158,9 @@ END SYN;
 -- Retrieval info: CONNECT: @address_a 0 0 8 0 address 0 0 8 0
 -- Retrieval info: CONNECT: @clock0 0 0 0 0 clock 0 0 0 0
 -- Retrieval info: CONNECT: q 0 0 16 0 @q_a 0 0 16 0
--- Retrieval info: GEN_FILE: TYPE_NORMAL rom_controller.vhd TRUE
--- Retrieval info: GEN_FILE: TYPE_NORMAL rom_controller.inc FALSE
--- Retrieval info: GEN_FILE: TYPE_NORMAL rom_controller.cmp TRUE
--- Retrieval info: GEN_FILE: TYPE_NORMAL rom_controller.bsf FALSE
--- Retrieval info: GEN_FILE: TYPE_NORMAL rom_controller_inst.vhd FALSE
+-- Retrieval info: GEN_FILE: TYPE_NORMAL rom_driver.vhd TRUE
+-- Retrieval info: GEN_FILE: TYPE_NORMAL rom_driver.inc FALSE
+-- Retrieval info: GEN_FILE: TYPE_NORMAL rom_driver.cmp TRUE
+-- Retrieval info: GEN_FILE: TYPE_NORMAL rom_driver.bsf FALSE
+-- Retrieval info: GEN_FILE: TYPE_NORMAL rom_driver_inst.vhd FALSE
 -- Retrieval info: LIB_FILE: altera_mf
