@@ -478,14 +478,23 @@ begin
     elsif (rising_edge(I_CLK_50_MHZ)) then
       if (s_current_mode = PROG_STATE) then
         -- Toggle selected register
-        if (s_keypressed = '1' and s_keypad_data = "10001") then -- H key pressed
+        if (s_previous_mode = OP_STATE) and
+           (s_current_mode  = PROG_STATE) then
+          s_addr_data_mode                <= '0';
+        elsif (s_keypressed = '1' and s_keypad_data = "10001") then -- H key pressed
           s_addr_data_mode                <= not s_addr_data_mode;
         else
           s_addr_data_mode                <= s_addr_data_mode;
         end if;
 
+
+        if (s_previous_mode = OP_STATE) and
+           (s_current_mode  = PROG_STATE) then
+          s_data_shift_reg                    <= (others=>'0');
+          s_addr_shift_reg                    <= (others=>'0');
+
         -- Add (data/addr) to shift registers when 0-F is pressed
-        if (s_keypressed = '1' and s_keypad_data(4) /= '1') then
+        elsif (s_keypressed = '1' and s_keypad_data(4) /= '1') then
           if (s_addr_data_mode = '1') then  -- Data mode
             s_data_shift_reg(15 downto 4) <= s_data_shift_reg(11 downto 0);
             s_data_shift_reg(3 downto 0)  <= s_keypad_data(3 downto 0);
