@@ -1,0 +1,42 @@
+The system shall have three modes, Init, Operation, and Program modes
+The system will begin in the init mode and only move to the operation mode after the data from rom has been copied to SRAM (Should take about a second)
+The reset key shall be used to restart the system back in Init mode at anytime
+The shift key will be used to toggle between the operation and program mode
+After moving from the init to the operation mode, the counter should be reset to zero, enabled, and counting in the forward direction
+
+In the init mode, the mode led should be disabled
+In the init mode, the display should be disabled and all input from the keypad should be ignored
+In the init mode, the default data from rom should be loaded into SRAM.
+
+When going from the programming mode to the operation mode, the counter should be disabled
+In the operation mode, the mode led should be enabled
+In the operation mode, the display should be enabled and H, L, and Shift key should be accepted
+In the operation mode, the direction of the counter can be toggled using the L key
+In the operation mode, the counter can be enabled or disabled using the H key
+In operation mode, the current address and data shall be displayed on the seven segment display
+In operation mode, the address will cycle from 0x00 to 0xFF and roll over at the end of the count depending on the current direction
+
+In the program mode, the mode led should be disabled
+In the program mode, the display should output the current address and data stored in the shift registers, and input from the keypad should be accepted
+In the program mode, the data and address shift registers should be reset to zero upon entering the program mode
+In the program mode, there should be two entry modes; address, and data entry
+Upon entering the program mode, the default mode should be the address entry mode
+The H key should be used to toggle the entry mode.
+When in address entry mode, keypad data should map to the (8-bit) address shift registers
+When in data entry mode, keypad data should map to the (16-bit) data shift registers
+For both entry modes, data should be added to the least significant nibble and shift the previous data in that nibble to the left. This will cause the last nibble to "fall" off the left side
+In the program mode, the L key should be used to save the current data to the current address at anytime
+
+The design should use the Altera DE2
+The design should be implemented in VHDL programmed using quartus II
+The design should use the built using an external 5x4 Matrix keypad attached to boards GPIO
+The design should use the HEX4 and HEX5 to display the address data and HEX3 down to 0 to display the data
+The design should use the KEY0 as a system reset key
+The design should use the LEDG0 as the mode LED
+
+The design should use only the lower 8 bits of the 18-bit SRAM address (0x00 to 0xFF)
+The design should use a data bit depth of 16 bits.
+The design should load the 1-Port 256 x 16 bit ROM using Quartus's MegaWizard with the data stored in sine.mif
+
+
+
