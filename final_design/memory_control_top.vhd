@@ -142,12 +142,21 @@ architecture behavioral of memory_control_top is
   -- System clock frequency in MHz
   constant C_CLK_FREQ_MHZ       : integer := 50;
 
+  -- Inital System reset time in ms
+  constant C_RESET_TIME_MS      : integer := 25;
+
   -- Max address of SRAM and ROM (255)
   constant C_MAX_ADDRESS        : unsigned(7 downto 0) := to_unsigned(255, 8);
 
   -------------
   -- SIGNALS --
   -------------
+
+  -- System reset control signal
+  signal s_reset_n              : std_logic := '0';
+
+  -- System reset control signal from counter
+  signal s_cntr_reset_n         : std_logic := '0';
 
   -- Signal to toggle (increment/decrement) address
   signal s_address_toggle       : std_logic := '0';
@@ -204,7 +213,7 @@ begin
   port map
   (
     I_CLK            => I_CLK_50_MHZ,
-    I_RESET_N        => I_RESET_N,
+    I_RESET_N        => s_reset_n,
     I_DISPLAY_ENABLE => s_display_enable,
     I_DATA_BITS      => s_display_data_bits,
     I_ADDR_BITS      => s_addr_bits(7 downto 0),
@@ -225,7 +234,7 @@ begin
   port map
   (
     I_CLK             => I_CLK_50_MHZ,
-    I_RESET_N         => I_RESET_N,
+    I_RESET_N         => s_reset_n,
     I_KEYPAD_ROWS     => I_KEYPAD_ROWS,
     O_KEYPAD_COLS     => O_KEYPAD_COLS,
     O_KEYPAD_DATA     => s_keypad_data,
@@ -241,7 +250,7 @@ begin
   port map
   (
     I_CLK             => I_CLK_50_MHZ,
-    I_RESET_N         => I_RESET_N,
+    I_RESET_N         => s_reset_n,
     I_SRAM_ENABLE     => s_sram_enable,
     I_COMMAND_TRIGGER => s_sram_trigger_1,
     I_RW              => s_sram_rw,
@@ -272,19 +281,42 @@ begin
   ---------------
 
   ------------------------------------------------------------------------------
+  -- Process Name     : SYSTEM_RST_OUTPUT
+  -- Sensitivity List : I_CLK_50_MHZ   : System clock
+  -- Useful Outputs   : s_cntr_reset_n : Reset signal from counter (active low)
+  -- Description      : System FW Reset Output logic (active low reset logic).
+  --                    Holding design in reset for (C_RESET_TIME_MS) ms
+  ------------------------------------------------------------------------------
+  SYSTEM_RST_OUTPUT: process (I_CLK_50_MHZ)
+    variable C_25MS_DURATION : integer := C_CLK_FREQ_MHZ * C_RESET_TIME_MS * 1000;
+    variable v_reset_cntr    : integer range 0 TO v_debounce_max_count := 0;
+  begin
+    if (rising_edge(I_CLK_50_MHZ)) then
+      if (v_reset_cntr = C_50MS_DURATION) then
+        v_reset_cntr    <= v_reset_cntr;
+        s_cntr_reset_n  <= '1';
+      else
+        v_reset_cntr    <= v_reset_cntr + 1;
+        s_cntr_reset_n  <= '0';
+      end if;
+    end if;
+  end process SYSTEM_RST_OUTPUT;
+  ------------------------------------------------------------------------------
+
+  ------------------------------------------------------------------------------
   -- Process Name     : ADDRESS_TOGGLE_COUNTER
   -- Sensitivity List : I_CLK_50_MHZ     : System clock
-  --                    I_RESET_N        : System reset (active low logic)
+  --                    s_reset_n        : System reset (active low logic)
   -- Useful Outputs   : s_address_toggle : Pulsed signal to toggle address
   -- Description      : Counter to delay changing address at a rate of either
   --                    255Hz (INIT_STATE) or 1Hz (OP_STATE).
   ------------------------------------------------------------------------------
-  ADDRESS_TOGGLE_COUNTER: process (I_CLK_50_MHZ, I_RESET_N)
+  ADDRESS_TOGGLE_COUNTER: process (I_CLK_50_MHZ, s_reset_n)
     constant C_1HZ_MAX_COUNT       : integer := C_CLK_FREQ_MHZ * 1000000;  -- 1 Hz
     constant C_255HZ_MAX_COUNT     : integer := C_CLK_FREQ_MHZ * 4000;     -- 255 Hz
     variable v_address_toggle_cntr : integer range 0 TO C_1HZ_MAX_COUNT := 0;
   begin
-    if (I_RESET_N = '0') then
+    if (s_reset_n = '0') then
       v_address_toggle_cntr     :=  0;
       s_address_toggle          <= '0';
 
@@ -319,13 +351,13 @@ begin
   ------------------------------------------------------------------------------
   -- Process Name     : ADDRESS_INDEX_COUNTER
   -- Sensitivity List : I_CLK_50_MHZ      : System clock
-  --                    I_RESET_N         : System reset (active low logic)
+  --                    s_reset_n         : System reset (active low logic)
   -- Useful Outputs   : s_current_address : Current address of counter
   -- Description      : A process to adjust address depending on mode.
   ------------------------------------------------------------------------------
-  ADDRESS_INDEX_COUNTER: process (I_CLK_50_MHZ, I_RESET_N)
+  ADDRESS_INDEX_COUNTER: process (I_CLK_50_MHZ, s_reset_n)
   begin
-    if (I_RESET_N = '0') then
+    if (s_reset_n = '0') then
       s_current_address     <= (others=>'1');
 
     elsif (rising_edge(I_CLK_50_MHZ)) then
@@ -363,7 +395,7 @@ begin
   ------------------------------------------------------------------------------
   -- Process Name     : ADDRESS_COUNTER_CONTROL
   -- Sensitivity List : I_CLK_50_MHZ           : System clock
-  --                    I_RESET_N              : System reset (active low logic)
+  --                    s_reset_n              : System reset (active low logic)
   -- Useful Outputs   : s_address_cntr_enabled : Whether the address counter
   --                                             is enabled
   --                    s_address_cntr_forward : Whether the counter is counting
@@ -371,9 +403,9 @@ begin
   -- Description      : A process to control address counter enable and
   --                    direction signals
   ------------------------------------------------------------------------------
-  ADDRESS_COUNTER_CONTROL: process (I_CLK_50_MHZ, I_RESET_N)
+  ADDRESS_COUNTER_CONTROL: process (I_CLK_50_MHZ, s_reset_n)
   begin
-    if (I_RESET_N = '0') then
+    if (s_reset_n = '0') then
       s_address_cntr_enabled   <= '1';
       s_address_cntr_forward   <= '1';
 
@@ -406,15 +438,15 @@ begin
   ------------------------------------------------------------------------------
   -- Process Name     : MODE_STATE_MACHINE
   -- Sensitivity List : I_CLK_50_MHZ    : System clock
-  --                    I_RESET_N       : System reset (active low logic)
+  --                    s_reset_n       : System reset (active low logic)
   -- Useful Outputs   : s_current_mode  : Current mode of the system
   --                    s_previous_mode : Mode of system last clock edge
   -- Description      : State machine to control different modes for
   --                    initialization, programming, and operation of system.
   ------------------------------------------------------------------------------
-  MODE_STATE_MACHINE: process (I_CLK_50_MHZ, I_RESET_N)
+  MODE_STATE_MACHINE: process (I_CLK_50_MHZ, s_reset_n)
   begin
-    if (I_RESET_N = '0') then
+    if (s_reset_n = '0') then
       s_current_mode     <= INIT_STATE;
       s_previous_mode    <= INIT_STATE;
 
@@ -463,14 +495,14 @@ begin
   ------------------------------------------------------------------------------
   -- Process Name     : INPUT_SHIFT_REGISTER
   -- Sensitivity List : I_CLK_50_MHZ     : System clock
-  --                    I_RESET_N        : System reset (active low logic)
+  --                    s_reset_n        : System reset (active low logic)
   -- Useful Outputs   : s_data_shift_reg : Shift register for inputted data
   --                    s_addr_shift_reg : Shift register for inputted address
   -- Description      : A process to control inputted data from the keypad.
   ------------------------------------------------------------------------------
-  INPUT_SHIFT_REGISTER: process (I_CLK_50_MHZ, I_RESET_N)
+  INPUT_SHIFT_REGISTER: process (I_CLK_50_MHZ, s_reset_n)
   begin
-    if (I_RESET_N = '0') then
+    if (s_reset_n = '0') then
       s_addr_data_mode                    <= '0';
       s_data_shift_reg                    <= (others=>'0');
       s_addr_shift_reg                    <= (others=>'0');
@@ -518,7 +550,7 @@ begin
   ------------------------------------------------------------------------------
   -- Process Name     : DATA_FLOW_CONTROL
   -- Sensitivity List : I_CLK_50_MHZ        : System clock
-  --                    I_RESET_N           : System reset (active low logic)
+  --                    s_reset_n           : System reset (active low logic)
   -- Useful Outputs   : s_display_enable    : Digit enable for display
   --                    s_sram_enable       : Enable signal for SRAM system
   --                    s_addr_bits         : Global address
@@ -530,9 +562,9 @@ begin
   -- Description      : A process to control the flow of data depending
   --                    on mode.
   ------------------------------------------------------------------------------
-  DATA_FLOW_CONTROL: process (I_CLK_50_MHZ, I_RESET_N)
+  DATA_FLOW_CONTROL: process (I_CLK_50_MHZ, s_reset_n)
   begin
-    if (I_RESET_N = '0') then
+    if (s_reset_n = '0') then
       s_display_enable          <= '0';
       s_sram_enable             <= '0';
       s_addr_bits               <= (others=>'0');
@@ -613,9 +645,13 @@ begin
   end process DATA_FLOW_CONTROL;
   ------------------------------------------------------------------------------
 
+  -- Reset system (low) when counter reset signal is low or system reset is low
+  s_reset_n <= s_cntr_reset_n and I_RESET_N;
+
   -- Selection for mode LED
   with s_current_mode select
     O_MODE_LED <= '1' when OP_STATE,
                   '0' when others;
+
 
 end architecture behavioral;
