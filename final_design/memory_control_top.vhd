@@ -289,14 +289,14 @@ begin
   ------------------------------------------------------------------------------
   SYSTEM_RST_OUTPUT: process (I_CLK_50_MHZ)
     variable C_25MS_DURATION : integer := C_CLK_FREQ_MHZ * C_RESET_TIME_MS * 1000;
-    variable v_reset_cntr    : integer range 0 TO v_debounce_max_count := 0;
+    variable v_reset_cntr    : integer range 0 TO C_25MS_DURATION := 0;
   begin
     if (rising_edge(I_CLK_50_MHZ)) then
-      if (v_reset_cntr = C_50MS_DURATION) then
-        v_reset_cntr    <= v_reset_cntr;
+      if (v_reset_cntr = C_25MS_DURATION) then
+        v_reset_cntr    := v_reset_cntr;
         s_cntr_reset_n  <= '1';
       else
-        v_reset_cntr    <= v_reset_cntr + 1;
+        v_reset_cntr    := v_reset_cntr + 1;
         s_cntr_reset_n  <= '0';
       end if;
     end if;
