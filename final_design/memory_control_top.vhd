@@ -423,7 +423,7 @@ begin
         s_address_cntr_enabled <= s_address_cntr_enabled;
       end if;
 
-      -- CDL=> Should direction be reset to forward when going from OP state to prog state?
+
       -- Control direction of counter depending on mode
       if (s_current_mode = OP_STATE) and
          (s_keypressed = '1' and s_keypad_data = "10010") then -- L key pressed
